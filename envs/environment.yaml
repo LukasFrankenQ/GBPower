@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: CC0-1.0
+
+name: pypsa-eur
+channels:
+- conda-forge
+- bioconda
+dependencies:
+- python>=3.8
+- pip
+
+- atlite>=0.2.9
+- pypsa>=0.30.2
+- linopy
+- dask
+
+# Dependencies of the workflow itself
+- xlrd
+- openpyxl!=3.1.1
+- seaborn
+- snakemake-minimal>=8.14
+- memory_profiler
+- yaml
+- pytables
+- lxml
+- powerplantmatching>=0.5.15,<0.6
+- numpy
+- pandas>=2.1
+- geopandas>=1
+- xarray>=2023.11.0
+- rioxarray
+- netcdf4
+- networkx
+- scipy
+- glpk
+- shapely>=2.0
+- pyscipopt
+- matplotlib
+- proj
+- fiona
+- country_converter
+- geopy
+- tqdm
+- pytz
+- jpype1
+- pyxlsb
+- graphviz
+- pre-commit
+- geojson
+
+# Keep in conda environment when calling ipython
+- ipython
+
+# GIS dependencies:
+- cartopy
+- descartes
+- rasterio!=1.2.10
+
+- pip:
+  - tsam>=2.3.1
+  - snakemake-storage-plugin-http
+  - snakemake-executor-plugin-slurm
+  - snakemake-executor-plugin-cluster-generic
+  - highspy

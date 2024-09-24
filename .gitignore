@@ -1,0 +1,8 @@
+resources/
+data/bundle/
+.snakemake/
+logs/
+gurobi.log
+scripts/__pycache__/
+.github/scripts/__pycache__/
+results/
