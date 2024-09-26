@@ -182,18 +182,8 @@ def gather_data(start, end):
         else:
 
             globals()[f'build_{quantity}'](start, end)
-            
-
-        
 
 
 
-
-
-
-
-
-
-# if __name__ == '__main__':
 
 
