@@ -15,7 +15,7 @@ from tqdm import tqdm
 from functools import wraps
 
 from io import StringIO
-from typing import Union, Tuple
+from typing import Iterable, Tuple
 
 # logger = logging.getLogger(__name__)
 
@@ -71,14 +71,12 @@ mels_url = (
     "?from={}T{}%3A{}Z&to={}T{}%3A{}Z&format=csv"
 )
 
-def build_maximum_export_period(date, period):
+def build_maximum_export_limits_period(date, period):
 
     prep_time = lambda x: str(x).zfill(2)
 
-    start = to_datetime(date, period)
+    start = to_datetime(date, period)    
     end = start + pd.Timedelta('30min')
-
-    assert start.tz == 'utc', 'Start time must be in UTC'
 
     response = robust_request(
         requests.get,
@@ -125,55 +123,47 @@ day_ahead_url = (
     'market-index?from={}T00%3A00Z&to={}'
     'T00%3A00Z&dataProviders=N2EX&dataProviders=APX&format=csv'
 )
+
 def build_day_ahead_prices(
-        start: Union[str, pd.Timestamp],
-        end: Union[str, pd.Timestamp]
+        date_range: Iterable[pd.Timestamp],
     ) -> Tuple[pd.Series, pd.Index]:
+    raise NotImplementedError('doesnt work yet')
 
-    if isinstance(start, str):
-        start = pd.Timestamp(start, tz='UTC')
-        end = pd.Timestamp(end, tz='UTC')
+    print(date_range)
+    date_range = date_range.copy().tz_convert('utc')
+    print(date_range)
 
-    all_dates = list(map(pd.Timestamp, pd.date_range(start, end, freq='30min', tz='utc')[:-1]))
+    start = date_range[0]
 
-    dfs = []
-
-    shift = pd.Timedelta(days=0)
-
-    while start + shift < end:
-
-        retrieve_start = (start + shift).strftime('%Y-%m-%d')
-        retrieve_end = (start + shift+pd.Timedelta('7D'))
-        retrieve_end = min(retrieve_end, end).strftime('%Y-%m-%d') 
-
-        response = requests.get(day_ahead_url.format(retrieve_start, retrieve_end))
-        data = StringIO(response.text)
-        df = pd.read_csv(data, index_col=0, parse_dates=True).sort_index()
-
-        # volume-weighted average of AP and N2E wholesale markets
-        df = (
-            (a := df.loc[df.DataProvider == "APXMIDP"])['Price'].mul(
-                a.Volume.div(
-                    t := df.groupby(df.index)['Volume'].sum()
-                )) + 
-            (n := df.loc[df.DataProvider == "N2EXMIDP"])['Price'].mul(
-                n.Volume.div(t)
+    response = (
+        requests.get(
+            day_ahead_url.format(
+                start.strftime('%Y-%m-%d'),
+                (start + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+                )
             )
         )
+    data = StringIO(response.text)
+    df = pd.read_csv(data, index_col=0, parse_dates=True).sort_index()
 
-        dfs.append(df)
-        shift += pd.Timedelta('7D')
+    # volume-weighted average of AP and N2E wholesale markets
+    df = (
+        (a := df.loc[df.DataProvider == "APXMIDP"])['Price'].mul(
+            a.Volume.div(
+                t := df.groupby(df.index)['Volume'].sum()
+            )) + 
+        (n := df.loc[df.DataProvider == "N2EXMIDP"])['Price'].mul(
+            n.Volume.div(t)
+        )
+    )
 
-    df = pd.concat(dfs).iloc[:-1]
+    df = pd.DataFrame(df.rename('day-ahead-prices')).iloc[:-1]
 
     duplicates = df.index.duplicated(keep='first')
     df = df[~duplicates]
 
-    problem_dates = pd.Index(all_dates).difference(df.index)
-    
-    df = df.reindex(all_dates).interpolate()
-    
-    return df, problem_dates
+
+    return df
 
 
 ######################    BALANCING ACTIONS    ##############################
@@ -370,23 +360,23 @@ if __name__ == '__main__':
     date_range = to_daterange(day)
 
     soutputs = {
-        'offers': 'offers.csv',
-        'bids': 'bids.csv',
+        'day_ahead_prices': 'day_ahead_prices.csv',
+        # 'bids': 'bids.csv',
+        # 'offers': 'offers.csv',
+        # 'physical_notifications': 'physical_notifications.csv',
+        # 'maximum_export_limits': 'maximum_export_limits.csv',
     }
+
+    first_timestep = None
+    last_timestep = None
 
     # for quantity, target in snakemake.outputs.items():
     for quantity, target in soutputs.items():
 
         logger.info(f"Building {quantity}.")
-
         funcname = f"build_{quantity}_period"
 
-        print('funcname')
-        print(funcname)
-
         if f"build_{quantity}_period" in globals():
-            print('building period data')
-
             data = []
 
             for ts in tqdm(date_range):
@@ -396,14 +386,25 @@ if __name__ == '__main__':
                     globals()[f"build_{quantity}_period"](date, period)
                     )
             
-            received_data = pd.concat(data, axis=1).T
-            # pd.concat(data, axis=1).to_csv(snakemake.output[quantity])
+            data = pd.concat(data, axis=1).T
  
         else:
-            print('building single data')
+            data = globals()[f'build_{quantity}'](date_range)
 
-            received_data = globals()[f'build_{quantity}'](date_range[0], date_range[-1])
+        print(data.index.get_level_values(0)[0])
+        print(data.index.get_level_values(0)[-1])
 
-        break
+        assert data.shape[0] % 48 == 0, 'Dataframe must have a multiple of 48 rows.'
 
-    print(received_data.sort_index(axis=1).head(15))
+        if first_timestep is None:
+            first_timestep = data.index.get_level_values(0)[0]
+        else:
+            assert first_timestep == data.index.get_level_values(0)[0], 'First timestep mismatch.'
+        
+        if last_timestep is None:
+            last_timestep = data.index.get_level_values(0)[-1]
+        else:
+            assert last_timestep == data.index.get_level_values(0)[-1], 'Last timestep mismatch.'
+
+        data.to_csv(target)
+
