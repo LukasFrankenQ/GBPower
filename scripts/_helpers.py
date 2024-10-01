@@ -15,10 +15,21 @@ def to_datetime(day, period):
     return pd.Timestamp(day, tz='Europe/London').tz_convert('utc') + pd.Timedelta(minutes=30) * (period - 1)
 
 
-def to_daterange(start, end):
-    '''Somewhat redundant, but ensures crucial consistency between datasets'''
-    assert (start.tz is not None + end.tz is not None) == 2, 'Both start and end must be timezone-naive'
-    return pd.date_range(start, end, freq='30min')
+def to_daterange(*args):
+    '''Somewhat redundant, but ensures consistency between datasets'''
+
+    if len(args) == 2:
+        assert (start.tz is not None + end.tz is not None) == 2, 'Both start and end must be timezone-naive'
+        start, end = args[0], args[1]
+    
+    elif len(args) == 1:
+
+        if not isinstance(args[0], pd.Timestamp):
+            assert len(args[0]) == 10, 'Expects single day or start and end dates'
+
+        start, end = pd.Timestamp(args[0]), pd.Timestamp(args[0]) + pd.Timedelta(days=1) - pd.Timedelta(minutes=30)
+
+    return pd.date_range(start, end, freq='30min', tz='Europe/London')
 
 
 def get_run_path(fn, dir, rdir, shared_resources, exclude_from_shared):

@@ -1,7 +1,17 @@
-import urllib
+# SPDX-FileCopyrightText: : 2024 Lukas Franken
+#
+# SPDX-License-Identifier: MIT
+
+
 import logging
+
+import urllib
 import requests
+import numpy as np
 import pandas as pd
+pd.set_option('future.no_silent_downcasting', True) # related to .replace(..) replacing .fillna()
+
+from tqdm import tqdm
 from functools import wraps
 
 from io import StringIO
@@ -15,10 +25,12 @@ from _helpers import (
     to_date_period,
     to_datetime,
     to_daterange,
-    # configure_logging,
+    configure_logging,
 )
 
 from _elexon_helpers import robust_request
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -204,7 +216,6 @@ def get_accepted_units(date, period, so_only=False):
 
 
 def get_volumes(date, period):
-    print('getting volumes for', date, period)
 
     units = get_accepted_units(date, period)
     unit_params = '&'.join(f"bmUnit={urllib.parse.quote_plus(unit)}" for unit in units)
@@ -228,7 +239,6 @@ def get_volumes(date, period):
     
 
 def get_trades(date, period):
-    print('getting trades for', date, period)
 
     units = get_accepted_units(date, period)
 
@@ -242,6 +252,7 @@ def get_trades(date, period):
 _cache = {}
 _calls_remaining = {}
 
+# both bids and offers build on the same data, so we cache the volumes and trades
 def cache_volumes_trades(func):
     @wraps(func)
     def wrapper(date, period):
@@ -263,23 +274,11 @@ def cache_volumes_trades(func):
 def _cleanup(func_name, key):
     _calls_remaining[key][func_name] = False
     if not any(_calls_remaining[key].values()):
-        print("Deleting volumes and trades for ", key)
         del _cache[key]
         del _calls_remaining[key]
 
 
-@cache_volumes_trades
-def get_offers(*args):
-    return get_bm_actions('offers', *args)
-
-
-@cache_volumes_trades
-def get_bids(*args):
-    return get_bm_actions('bids', *args)
-
-
-def get_bm_actions(action, volumes, trades, date, period):
-    print('Building', action, 'for', date, period)
+def build_bm_actions_period(action, volumes, trades, date, period):
 
     vol_marker = {'bids': 'negative', 'offers': 'positive'}[action]
     
@@ -300,7 +299,8 @@ def get_bm_actions(action, volumes, trades, date, period):
         row = unit_volumes[['dataType'] + cols]
         row = (
             row.loc[row['dataType'] == 'Tagged', cols]
-            .fillna(value=0)
+            # .fillna(value=0)
+            .replace(np.nan, 0)
             .abs()
             .max()
         )
@@ -340,31 +340,70 @@ def get_bm_actions(action, volumes, trades, date, period):
     return detected_actions
 
 
-######################    GATHER DATA    ##############################
-def gather_data(start, end):
+@cache_volumes_trades
+def build_offers_period(*args):
+    return build_bm_actions_period('offers', *args)
 
-    date_range = to_daterange(start, end)
 
-    for quantity in snakemake.outputs.keys():
+@cache_volumes_trades
+def build_bids_period(*args):
+    return build_bm_actions_period('bids', *args)
+
+
+def get_interconnector_prices(date):
+    raise NotImplementedError
+
+
+def get_boundary_flow_limits(date):
+    raise NotImplementedError
+
+
+
+
+if __name__ == '__main__':
+
+    configure_logging(snakemake)
+
+    day = snakemake.wildcards.day
+    logger.info(f"Building data base for {day}.")
+
+    date_range = to_daterange(day)
+
+    soutputs = {
+        'offers': 'offers.csv',
+        'bids': 'bids.csv',
+    }
+
+    # for quantity, target in snakemake.outputs.items():
+    for quantity, target in soutputs.items():
+
+        logger.info(f"Building {quantity}.")
+
+        funcname = f"build_{quantity}_period"
+
+        print('funcname')
+        print(funcname)
 
         if f"build_{quantity}_period" in globals():
+            print('building period data')
 
             data = []
-            
-            for ts in date_range:
+
+            for ts in tqdm(date_range):
                 date, period = to_date_period(ts)
 
                 data.append(
                     globals()[f"build_{quantity}_period"](date, period)
                     )
             
-            pd.concat(data, axis=1).to_csv(snakemake.output[quantity])
-        
+            received_data = pd.concat(data, axis=1).T
+            # pd.concat(data, axis=1).to_csv(snakemake.output[quantity])
+ 
         else:
+            print('building single data')
 
-            globals()[f'build_{quantity}'](start, end)
+            received_data = globals()[f'build_{quantity}'](date_range[0], date_range[-1])
 
+        break
 
-
-
-
+    print(received_data.sort_index(axis=1).head(15))

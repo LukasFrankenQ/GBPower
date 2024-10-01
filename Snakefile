@@ -1,23 +1,18 @@
-from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
+# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors, Lukas Franken
+#
+# SPDX-License-Identifier: MIT
+
+import yaml
+from pathlib import Path
+from os.path import normpath, exists
 from snakemake.utils import min_version
+from shutil import copyfile, move, rmtree
 
 from scripts._helpers import path_provider
 
-HTTP = HTTPRemoteProvider()
 
+min_version("8.11")
 
-min_version("7.7")
+configfile: "config.yaml"
 
-
-
-rule build_base:
-    params:
-        base=config_provider("base"),
-    output:
-        day_ahead_prices="data/base/day_ahead_prices.csv",
-    script:
-        "scripts/build_base.py"
-    conda:
-        "envs/environment.yaml"
-
-
+include: "rules/retrieve.smk"
