@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
+
 rule build_base:
     output:
+        date_register="data/base/{day}/settlement_period_register.csv",
         day_ahead_prices="data/base/{day}/day_ahead_prices.csv",
         offers="data/base/{day}/offers.csv",
         bids="data/base/{day}/bids.csv",

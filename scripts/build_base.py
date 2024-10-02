@@ -1,9 +1,36 @@
 # SPDX-FileCopyrightText: : 2024 Lukas Franken
 #
 # SPDX-License-Identifier: MIT
+"""
+build_base.py
+=============
+This script is designed to build various datasets related to the UK electricity market using data from the Elexon API. The script includes functions to fetch and process data for physical notifications, maximum export limits, day-ahead prices, and balancing actions (bids and offers). The processed data is then saved to CSV files.
+Functions
+---------
+- `build_physical_notifications_period(date, period)`: Fetches and processes physical notifications data for a given date and period.
+- `build_maximum_export_limits_period(date, period)`: Fetches and processes maximum export limits data for a given date and period.
+- `build_day_ahead_prices(date_range)`: Fetches and processes day-ahead prices for a given date range.
+- `build_bm_actions_period(action, volumes, trades, date, period)`: Processes balancing actions (bids or offers) for a given date and period.
+- `build_offers_period(*args)`: Builds offers data for a given date and period.
+- `build_bids_period(*args)`: Builds bids data for a given date and period.
+- `build_interconnector_prices(date)`: Placeholder function for fetching interconnector prices.
+- `build_boundary_flow_limits(date)`: Placeholder function for fetching boundary flow limits.
+Usage
+-----
+The script is intended to be run as a standalone module. It uses the `snakemake` workflow management system to handle input and output file paths and other parameters.
+Example
+-------
+To run the script, use the following command:
+.. code-block:: bash
+    python build_base.py
+The script will log its progress and save the processed data to CSV files specified in the `soutputs` dictionary.
+"""
 
 
 import logging
+
+logger = logging.getLogger(__name__)
+
 
 import urllib
 import requests
@@ -16,10 +43,6 @@ from functools import wraps
 
 from io import StringIO
 from typing import Iterable, Tuple
-
-# logger = logging.getLogger(__name__)
-
-# configure_logging()
 
 from _helpers import (
     to_date_period,
@@ -241,7 +264,7 @@ _cache = {}
 _calls_remaining = {}
 
 # both bids and offers build on the same data, so we cache the volumes and trades
-def cache_volumes_trades(func):
+def _cache_volumes_trades(func):
     @wraps(func)
     def wrapper(date, period):
         key = (date, period)
@@ -328,12 +351,12 @@ def build_bm_actions_period(action, volumes, trades, date, period):
     return detected_actions
 
 
-@cache_volumes_trades
+@_cache_volumes_trades
 def build_offers_period(*args):
     return build_bm_actions_period('offers', *args)
 
 
-@cache_volumes_trades
+@_cache_volumes_trades
 def build_bids_period(*args):
     return build_bm_actions_period('bids', *args)
 
@@ -346,6 +369,63 @@ def get_boundary_flow_limits(date):
     raise NotImplementedError
 
 
+########################   BUILDING DATA REGISTER   #######################
+dst_start_dates = pd.to_datetime([
+    '2019-03-31',
+    '2020-03-29',
+    '2021-03-28',
+    '2022-03-27',
+    '2023-03-26',
+    '2024-03-31',
+    '2025-03-30',
+    '2026-03-29',
+])
+dst_end_dates = pd.to_datetime([
+    '2019-10-27',
+    '2020-10-25',
+    '2021-10-31',
+    '2022-10-30',
+    '2023-10-29',
+    '2024-10-27',
+    '2025-10-26',
+    '2026-10-25',
+])
+
+def classify_day(day):
+
+    if day in dst_start_dates:
+        return 'start_savings'
+    elif day in dst_end_dates:
+        return 'end_savings'
+    elif (sum(day > dst_start_dates) + sum(day > dst_end_dates)) % 2 == 0:
+        return 'winter'
+    elif (sum(day > dst_start_dates) + sum(day > dst_end_dates)) % 2 == 1:
+        return 'summer'
+
+    raise ValueError('Couldnt classify date.')
+
+
+def build_sp_register(day):
+    mode = classify_day(day)
+
+    start = pd.Timestamp(day, tz='Europe/London').tz_convert('UTC')
+
+    if mode == 'winter' or mode == 'summer':
+        periods = 48
+    elif mode == 'start_savings':
+        periods = 46
+    elif mode == 'end_savings':
+        periods = 50
+    else:
+        raise ValueError(f'Mode {mode} not recognised.')
+
+    return pd.DataFrame(
+        {
+            'settlement_period': range(1, periods+1)
+            },
+        index=pd.date_range(start, periods=periods, freq='30min', tz='UTC')
+    )
+
 
 
 if __name__ == '__main__':
@@ -353,9 +433,14 @@ if __name__ == '__main__':
     configure_logging(snakemake)
 
     day = snakemake.wildcards.day
+    day_period_register = build_sp_register(day)
+
+    day_period_register.to_csv(snakemake.output.date_register)
+
     logger.info(f"Building data base for {day}.")
 
-    date_range = to_daterange(day)
+    date_range = day_period_register.index
+    periods = day_period_register.settlement_period.tolist()
 
     soutputs = {
         'day_ahead_prices': 'day_ahead_prices.csv',
@@ -371,17 +456,19 @@ if __name__ == '__main__':
     # for quantity, target in snakemake.outputs.items():
     for quantity, target in soutputs.items():
 
+        if quantity == 'date_register':
+            continue
+
         logger.info(f"Building {quantity}.")
         funcname = f"build_{quantity}_period"
 
         if f"build_{quantity}_period" in globals():
             data = []
 
-            for ts in tqdm(date_range):
-                date, period = to_date_period(ts)
+            for period in tqdm(periods):
 
                 data.append(
-                    globals()[f"build_{quantity}_period"](date, period)
+                    globals()[f"build_{quantity}_period"](day, period)
                     )
             
             data = pd.concat(data, axis=1).T
@@ -390,7 +477,7 @@ if __name__ == '__main__':
             data = globals()[f'build_{quantity}'](date_range)
 
         # ensure consistency between datasets
-        assert data.shape[0] % 48 == 0, 'Dataframe must have a multiple of 48 rows.'
+        assert len(data.index.get_level_values(0).unique()) == len(date_range), 'Number of periods mismatch.'
 
         if first_timestep is None:
             first_timestep = data.index.get_level_values(0)[0]
