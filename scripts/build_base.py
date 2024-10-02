@@ -120,26 +120,23 @@ def build_maximum_export_limits_period(date, period):
 ######################    DAY-AHEAD PRICES   ##############################
 day_ahead_url = (
     'https://data.elexon.co.uk/bmrs/api/v1/balancing/pricing/'
-    'market-index?from={}T00%3A00Z&to={}'
-    'T00%3A00Z&dataProviders=N2EX&dataProviders=APX&format=csv'
+    'market-index?from={}%3A00Z&to={}'
+    '%3A00Z&dataProviders=N2EX&dataProviders=APX&format=csv'
 )
 
 def build_day_ahead_prices(
         date_range: Iterable[pd.Timestamp],
     ) -> Tuple[pd.Series, pd.Index]:
-    raise NotImplementedError('doesnt work yet')
 
-    print(date_range)
     date_range = date_range.copy().tz_convert('utc')
-    print(date_range)
 
     start = date_range[0]
 
     response = (
         requests.get(
             day_ahead_url.format(
-                start.strftime('%Y-%m-%d'),
-                (start + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+                start.strftime('%Y-%m-%dT%H'),
+                (start + pd.Timedelta(days=1)).strftime('%Y-%m-%dT%H'),
                 )
             )
         )
@@ -151,7 +148,7 @@ def build_day_ahead_prices(
         (a := df.loc[df.DataProvider == "APXMIDP"])['Price'].mul(
             a.Volume.div(
                 t := df.groupby(df.index)['Volume'].sum()
-            )) + 
+            )) +
         (n := df.loc[df.DataProvider == "N2EXMIDP"])['Price'].mul(
             n.Volume.div(t)
         )
@@ -159,9 +156,10 @@ def build_day_ahead_prices(
 
     df = pd.DataFrame(df.rename('day-ahead-prices')).iloc[:-1]
 
+    # cleanup
     duplicates = df.index.duplicated(keep='first')
     df = df[~duplicates]
-
+    df = df.reindex(date_range).interpolate()
 
     return df
 
@@ -361,10 +359,10 @@ if __name__ == '__main__':
 
     soutputs = {
         'day_ahead_prices': 'day_ahead_prices.csv',
-        # 'bids': 'bids.csv',
-        # 'offers': 'offers.csv',
-        # 'physical_notifications': 'physical_notifications.csv',
-        # 'maximum_export_limits': 'maximum_export_limits.csv',
+        'bids': 'bids.csv',
+        'offers': 'offers.csv',
+        'physical_notifications': 'physical_notifications.csv',
+        'maximum_export_limits': 'maximum_export_limits.csv',
     }
 
     first_timestep = None
@@ -391,9 +389,7 @@ if __name__ == '__main__':
         else:
             data = globals()[f'build_{quantity}'](date_range)
 
-        print(data.index.get_level_values(0)[0])
-        print(data.index.get_level_values(0)[-1])
-
+        # ensure consistency between datasets
         assert data.shape[0] % 48 == 0, 'Dataframe must have a multiple of 48 rows.'
 
         if first_timestep is None:
