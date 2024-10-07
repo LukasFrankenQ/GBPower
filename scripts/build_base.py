@@ -443,11 +443,11 @@ if __name__ == '__main__':
     periods = day_period_register.settlement_period.tolist()
 
     soutputs = {
-        'day_ahead_prices': 'day_ahead_prices.csv',
-        'bids': 'bids.csv',
-        'offers': 'offers.csv',
-        'physical_notifications': 'physical_notifications.csv',
         'maximum_export_limits': 'maximum_export_limits.csv',
+        # 'day_ahead_prices': 'day_ahead_prices.csv',
+        # 'bids': 'bids.csv',
+        # 'offers': 'offers.csv',
+        # 'physical_notifications': 'physical_notifications.csv',
     }
 
     first_timestep = None
