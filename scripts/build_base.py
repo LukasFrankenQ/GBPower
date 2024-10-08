@@ -15,22 +15,12 @@ Functions
 - `build_bids_period(*args)`: Builds bids data for a given date and period.
 - `build_interconnector_prices(date)`: Placeholder function for fetching interconnector prices.
 - `build_boundary_flow_limits(date)`: Placeholder function for fetching boundary flow limits.
-Usage
------
-The script is intended to be run as a standalone module. It uses the `snakemake` workflow management system to handle input and output file paths and other parameters.
-Example
--------
-To run the script, use the following command:
-.. code-block:: bash
-    python build_base.py
-The script will log its progress and save the processed data to CSV files specified in the `soutputs` dictionary.
 """
 
 
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 import urllib
 import requests
@@ -45,9 +35,7 @@ from io import StringIO
 from typing import Iterable, Tuple
 
 from _helpers import (
-    to_date_period,
     to_datetime,
-    to_daterange,
     configure_logging,
 )
 
@@ -370,6 +358,7 @@ def get_boundary_flow_limits(date):
 
 
 ########################   BUILDING DATA REGISTER   #######################
+# data on daylight savings start and end dates
 dst_start_dates = pd.to_datetime([
     '2019-03-31',
     '2020-03-29',
@@ -433,17 +422,18 @@ if __name__ == '__main__':
     configure_logging(snakemake)
 
     day = snakemake.wildcards.day
-    day_period_register = build_sp_register(day)
+    sp_register = build_sp_register(day)
 
-    day_period_register.to_csv(snakemake.output.date_register)
+    sp_register.to_csv(snakemake.output.date_register)
 
     logger.info(f"Building data base for {day}.")
 
-    date_range = day_period_register.index
-    periods = day_period_register.settlement_period.tolist()
+    date_range = sp_register.index
+    periods = sp_register.settlement_period.tolist()
 
     soutputs = {
-        'maximum_export_limits': 'maximum_export_limits.csv',
+        'boundary_flow_limits': 'boundary_flow_limits.csv',
+        # 'maximum_export_limits': 'maximum_export_limits.csv',
         # 'day_ahead_prices': 'day_ahead_prices.csv',
         # 'bids': 'bids.csv',
         # 'offers': 'offers.csv',

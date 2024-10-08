@@ -3,10 +3,20 @@
 # SPDX-License-Identifier: MIT
 
 
+rule build_flow_constraints:
+    output:
+        flow_constraints="data/flow_constraints_{year}.csv"
+    resources:
+        mem_mb=4000,
+    log:
+        "../logs/flow_constraints_{year}.log",
+    script:
+        "../scripts/build_flow_constraints.py"
+
+
 rule build_base:
     input:
-        year_ahead_constraints="data/year-ahead-constraint-limits.csv",
-        two_year_ahead_constraints="data/24-months-ahead-constraint-limit_060924.csv",
+        flow_constraints=lambda wildcards: f"data/flow_constraints_{wildcards.day[:4]}.csv",
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
         day_ahead_prices="data/base/{day}/day_ahead_prices.csv",
@@ -24,4 +34,3 @@ rule build_base:
         "../envs/environment.yaml",
     script:
         "../scripts/build_base.py"
-
