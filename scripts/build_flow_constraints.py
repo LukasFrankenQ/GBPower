@@ -24,7 +24,7 @@ from urllib import parse
 from pytz.exceptions import NonExistentTimeError
 
 from _helpers import configure_logging
-from build_base import dst_start_dates, dst_end_dates, build_sp_register
+from _constants import dst_start_dates, dst_end_dates, build_sp_register
 
 
 
