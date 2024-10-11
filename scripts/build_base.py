@@ -432,7 +432,7 @@ if __name__ == '__main__':
     periods = sp_register.settlement_period.tolist()
 
     soutputs = {
-        'boundary_flow_limits': 'boundary_flow_limits.csv',
+        'boundary_flow_constraints': 'boundary_flow_constraints.csv',
         # 'maximum_export_limits': 'maximum_export_limits.csv',
         # 'day_ahead_prices': 'day_ahead_prices.csv',
         # 'bids': 'bids.csv',

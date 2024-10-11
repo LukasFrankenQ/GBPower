@@ -24,7 +24,7 @@ rule build_base:
         bids="data/base/{day}/bids.csv",
         physical_notifications="data/base/{day}/physical_notifications.csv",
         maximum_export_limits="data/base/{day}/maximum_export_limits.csv",
-        boundary_flow_limits="data/base/{day}/boundary_flow_limits.csv",
+        boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         interconnector_prices="data/base/{day}/interconnector_prices.csv",
     resources:
         mem_mb=4000,
