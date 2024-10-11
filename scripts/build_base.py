@@ -354,17 +354,19 @@ def get_interconnector_prices(date):
     raise NotImplementedError
 
 
-def build_boundary_flow_constraints(date):
+def build_boundary_flow_constraints(date_range):
     
     total_data = pd.read_csv(
         snakemake.input.flow_constraints,
         index_col=0,
         parse_dates=True
         )
-    print(total_data)
-    print(total_data.loc[date])
 
-
+    if not (const := total_data.loc[date_range]).empty:
+        return const
+    
+    else:
+        return get_boundary_flow_day(date_range)
 
 
 if __name__ == '__main__':
@@ -416,9 +418,9 @@ if __name__ == '__main__':
             data = pd.concat(data, axis=1).T
  
         else:
-            print('in here')
             data = globals()[f'build_{quantity}'](date_range)
 
+        print(data)
         # ensure consistency between datasets
         assert len(data.index.get_level_values(0).unique()) == len(date_range), 'Number of periods mismatch.'
 

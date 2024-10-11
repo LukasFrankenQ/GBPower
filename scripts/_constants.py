@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 # data on daylight savings start and end dates
 dst_start_dates = pd.to_datetime([
     '2019-03-31',
@@ -58,4 +59,3 @@ def build_sp_register(day):
             },
         index=pd.date_range(start, periods=periods, freq='30min', tz='UTC')
     )
-
