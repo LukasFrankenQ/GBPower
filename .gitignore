@@ -4,5 +4,6 @@ data/bundle/
 logs/
 gurobi.log
 scripts/__pycache__/
+scripts/_tokens.py
 .github/scripts/__pycache__/
 results/

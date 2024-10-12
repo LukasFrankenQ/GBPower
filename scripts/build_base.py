@@ -7,13 +7,14 @@ build_base.py
 This script is designed to build various datasets related to the UK electricity market using data from the Elexon API. The script includes functions to fetch and process data for physical notifications, maximum export limits, day-ahead prices, and balancing actions (bids and offers). The processed data is then saved to CSV files.
 Functions
 ---------
+- `build_sp_register(day)`: Builds a settlement period register for a given day.
 - `build_physical_notifications_period(date, period)`: Fetches and processes physical notifications data for a given date and period.
 - `build_maximum_export_limits_period(date, period)`: Fetches and processes maximum export limits data for a given date and period.
 - `build_day_ahead_prices(date_range)`: Fetches and processes day-ahead prices for a given date range.
 - `build_bm_actions_period(action, volumes, trades, date, period)`: Processes balancing actions (bids or offers) for a given date and period.
 - `build_offers_period(*args)`: Builds offers data for a given date and period.
 - `build_bids_period(*args)`: Builds bids data for a given date and period.
-- `build_interconnector_prices(date)`: Placeholder function for fetching interconnector prices.
+- `build_europe_day_ahead_prices(date)`: Placeholder function for fetching interconnector prices.
 - `build_boundary_flow_limits(date)`: Placeholder function for fetching boundary flow limits.
 """
 
@@ -350,8 +351,38 @@ def build_bids_period(*args):
     return build_bm_actions_period('bids', *args)
 
 
-def get_interconnector_prices(date):
-    raise NotImplementedError
+def build_europe_day_ahead_prices(date_range):
+
+    data = pd.read_csv(
+        snakemake.input.europe_day_ahead_prices,
+        index_col=0,
+        parse_dates=True
+    ).tz_localize('utc')
+
+    if date_range[0] >= data.index[0] and date_range[-1] <= data.index[-1]:
+        return (
+            data
+            .reindex(date_range, method='ffill')
+            .loc[date_range]
+        )
+    elif date_range[0] > data.index[-1]:
+        raise ValueError(
+            "Queried date range {} is after the latest available date {}.".format(
+                date_range[0], data.index[-1]
+            )
+        )
+    elif date_range[-1] < data.index[0]:
+        raise ValueError(
+            "Queried date range {} is before the earliest available date {}.".format(
+                date_range[-1], data.index[0]
+            )
+        )
+    else:
+        raise ValueError(
+            "Queried date range {} is not fully covered by the available data range {} to {}.".format(
+                date_range, data.index[0], data.index[-1]
+            )
+        )
 
 
 def build_boundary_flow_constraints(date_range):
@@ -360,7 +391,7 @@ def build_boundary_flow_constraints(date_range):
         snakemake.input.flow_constraints,
         index_col=0,
         parse_dates=True
-        )
+    )
 
     if not (const := total_data.loc[date_range]).empty:
         return const
@@ -383,28 +414,16 @@ if __name__ == '__main__':
     date_range = sp_register.index
     periods = sp_register.settlement_period.tolist()
 
-    soutputs = {
-        'boundary_flow_constraints': 'boundary_flow_constraints.csv',
-        # 'maximum_export_limits': 'maximum_export_limits.csv',
-        # 'day_ahead_prices': 'day_ahead_prices.csv',
-        # 'bids': 'bids.csv',
-        # 'offers': 'offers.csv',
-        # 'physical_notifications': 'physical_notifications.csv',
-    }
-
     first_timestep = None
     last_timestep = None
 
-    # for quantity, target in snakemake.outputs.items():
-    for quantity, target in soutputs.items():
+    for quantity, target in snakemake.output.items():
 
         if quantity == 'date_register':
             continue
 
         logger.info(f"Building {quantity}.")
         funcname = f"build_{quantity}_period"
-
-        print(quantity)
 
         if f"build_{quantity}_period" in globals():
             data = []
@@ -420,7 +439,6 @@ if __name__ == '__main__':
         else:
             data = globals()[f'build_{quantity}'](date_range)
 
-        print(data)
         # ensure consistency between datasets
         assert len(data.index.get_level_values(0).unique()) == len(date_range), 'Number of periods mismatch.'
 
