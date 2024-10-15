@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 """
-Script to be transparent about how the Europe day ahead prices are built.
+Script building Europe day ahead prices.
+Included for transparency, not part of the snakemake workflow.
 
 Draws data from EMBER: https://ember-climate.org/data-catalogue/european-wholesale-electricity-price-data/
 
