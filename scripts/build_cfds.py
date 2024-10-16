@@ -91,4 +91,4 @@ if __name__ == "__main__":
                 ).rename(date)
             )
 
-    pd.concat(strike_prices, axis=1).T.to_csv(snakemake.output['cfd_strike_prices'])
+    pd.concat(strike_prices, axis=1).to_csv(snakemake.output['cfd_strike_prices'])
