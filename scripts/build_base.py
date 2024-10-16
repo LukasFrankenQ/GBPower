@@ -43,8 +43,6 @@ from build_flow_constraints import get_boundary_flow_day
 from _elexon_helpers import robust_request
 from _constants import build_sp_register
 
-logger = logging.getLogger(__name__)
-
 
 
 ######################    PHYSICAL NOTIFICATIONS   ########################
@@ -387,17 +385,34 @@ def build_europe_day_ahead_prices(date_range):
 
 def build_boundary_flow_constraints(date_range):
     
-    total_data = pd.read_csv(
+    year_data = pd.read_csv(
         snakemake.input.flow_constraints,
         index_col=0,
         parse_dates=True
     )
 
-    if not (const := total_data.loc[date_range]).empty:
-        return const
-    
-    else:
-        return get_boundary_flow_day(date_range)
+    try:
+        return year_data.loc[date_range]
+        
+    except KeyError:
+        df = get_boundary_flow_day(date_range)
+
+    # method does not work if at any timesteps data is missing for all boundaries
+    assert not df.isna().all(axis=1).any()
+
+    # based on mean value of each boundary, fill missing 
+    # values according to variation over the day
+    df = df.fillna(
+        pd.DataFrame(
+                df.mean(axis=1).values[:, None] * year_data.mean().values / year_data.mean().mean(),
+                index=df.index,
+                columns=df.columns
+            )
+        )
+
+    assert df.isna().sum().sum() == 0, "There are missing values in the flow constraint data."
+
+    return df
 
 
 if __name__ == '__main__':
@@ -423,7 +438,6 @@ if __name__ == '__main__':
             continue
 
         logger.info(f"Building {quantity}.")
-        funcname = f"build_{quantity}_period"
 
         if f"build_{quantity}_period" in globals():
             data = []
@@ -433,7 +447,7 @@ if __name__ == '__main__':
                 data.append(
                     globals()[f"build_{quantity}_period"](day, period)
                     )
-            
+
             data = pd.concat(data, axis=1).T
  
         else:
@@ -446,7 +460,7 @@ if __name__ == '__main__':
             first_timestep = data.index.get_level_values(0)[0]
         else:
             assert first_timestep == data.index.get_level_values(0)[0], 'First timestep mismatch.'
-        
+
         if last_timestep is None:
             last_timestep = data.index.get_level_values(0)[-1]
         else:

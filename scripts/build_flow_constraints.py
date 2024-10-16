@@ -29,6 +29,26 @@ from _constants import dst_start_dates, dst_end_dates, build_sp_register
 
 
 def get_boundary_flow_day(date_range):
+    """
+    Fetches and processes boundary flow data for a given date range.
+    This function queries the National Grid ESO API to retrieve boundary flow data
+    for specified boundaries within the given date range. The data is then processed
+    and returned as a DataFrame.
+    Parameters:
+    date_range (pd.DatetimeIndex): A range of dates for which to fetch the boundary flow data.
+    Returns:
+    pd.DataFrame: A DataFrame containing the boundary flow data with boundaries as columns
+                  and the date range as the index. If no data is found, returns a DataFrame
+                  filled with NaN values.
+    Notes:
+    - The function handles daylight saving time changes by adjusting the DataFrame index accordingly.
+    - Boundaries with flow values greater than or equal to 15,000 MW are set to NaN.
+    - The function ensures that the DataFrame columns match the specified boundaries.
+    Example:
+    >>> date_range = pd.date_range(start='2023-01-01', end='2023-01-07', freq='H')
+    >>> df = get_boundary_flow_day(date_range)
+    >>> print(df.head())
+    """
 
     day = date_range[len(date_range) // 2].strftime('%Y-%m-%d')
 
@@ -155,6 +175,7 @@ if __name__ == '__main__':
 
     df = pd.concat(ds)
 
+    # some values seem unnaturally low, set them to nan and interpolate
     df = df.mask(df < df.mean() * 0.3).interpolate()
 
     threshold = 60 * 48 # two months of unchanging data are set to nan, and inferred from other constraints 
@@ -179,7 +200,7 @@ if __name__ == '__main__':
 
     df[final_mask] = np.nan
 
-    # method does not work in at any timesteps no boundary has data
+    # method does not work if at any timesteps data is missing for all boundaries
     assert not df.isna().all(axis=1).any()
 
     df = df.fillna(
