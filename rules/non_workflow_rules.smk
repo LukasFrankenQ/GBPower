@@ -10,7 +10,7 @@ rule build_europe_day_ahead_prices:
 
 rule build_roc_values:
     input:
-        # uses whichever days are available.
+        # Builds estimated ROC values for whichever days are available.
         # but requires 300 days of data from build_base to be preset to run
         lambda wildcards: (
             lambda glob: (
@@ -27,7 +27,9 @@ rule build_roc_values:
             )(glob.glob("data/base/*"))
         )(
             __import__('glob')
-        )
+        ),
+        bmu_locations="data/temp_located_bmus.csv",
+        cfd_strike_prices="resources/cfd_strike_prices.csv",
     output:
         protected("data/roc_values.csv")
     resources:
@@ -37,5 +39,5 @@ rule build_roc_values:
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_roc_levels.py"
+        "../non_workflow_scripts/build_roc_values.py"
 
