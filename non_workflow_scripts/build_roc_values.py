@@ -29,58 +29,46 @@ import pandas as pd
 
 from tqdm import tqdm
 from pathlib import Path
-from scipy import stats, optimize
+from scipy import stats
+from scipy.stats import norm
 
 sys.path.append(str(Path.cwd() / 'scripts'))
 from _helpers import configure_logging
 
 
+
 def estimate_normal_params_truncated(data, truncation_quantile=0.7):
     """
     Estimate the parameters of an original normal distribution given data
-    truncated at a specified quantile.
+    truncated at a specified quantile using the method of moments.
 
     Parameters:
     - data: array-like, the observed truncated data
-    - truncation_quantile: float, the quantile at which the data is truncated (default is 0.7)
+    - truncation_quantile: float, the quantile at which the data is truncated.
 
     Returns:
     - mu_est: float, estimated mean of the original normal distribution
     - sigma_est: float, estimated standard deviation of the original normal distribution
     """
-    mu_init = np.mean(data)
-    sigma_init = np.std(data, ddof=1)
-    params_init = [mu_init, sigma_init]
+    data = np.asarray(data)
+    if data.size == 0:
+        raise ValueError("Data array is empty.")
 
-    truncation_point = stats.norm.ppf(truncation_quantile)
+    x_bar = np.mean(data)
+    s = np.std(data, ddof=1)
 
-    def neg_log_likelihood(params):
-        mu, sigma = params
-        if sigma <= 0:
-            return np.inf  # sigma must be positive
+    q = truncation_quantile
+    z_q = norm.ppf(q)
+    alpha = z_q
 
-        pdf_vals = stats.norm.pdf(data, loc=mu, scale=sigma)
-        cdf_trunc = stats.norm.cdf(truncation_point, loc=mu, scale=sigma)
+    lambda_ = norm.pdf(alpha) / (1 - norm.cdf(alpha))
 
-        epsilon = 1e-9
-        pdf_vals = np.maximum(pdf_vals, epsilon)
-        cdf_trunc = max(cdf_trunc, epsilon)
+    beta = 1 - lambda_ * (lambda_ - alpha)
+    sigma_est = s / np.sqrt(beta)
+    mu_est = x_bar - sigma_est * lambda_
 
-        nll = -np.sum(np.log(pdf_vals)) + len(data) * np.log(cdf_trunc)
-        return nll
+    return mu_est, sigma_est
 
-    result = optimize.minimize(
-        neg_log_likelihood,
-        params_init,
-        method='L-BFGS-B',
-        bounds=[(None, None), (1e-5, None)]
-    )
-
-    if result.success:
-        mu_est, sigma_est = result.x
-        return mu_est, sigma_est
-    else:
-        raise RuntimeError("Optimization failed: " + result.message)
 
 
 if __name__ == '__main__':
@@ -135,8 +123,6 @@ if __name__ == '__main__':
         all_roc_plants = bmus.loc[bmus['carrier'] == carrier]
         all_roc_plants = all_roc_plants.drop(all_roc_plants.index.intersection(cfd))
 
-        # roc_avail = bid_stats.loc[bid_stats['carrier'] == carrier]
-        # roc_avail = roc_avail.loc[roc_avail.index.intersection(bmus.index)]
         roc_avail = all_roc_plants.loc[all_roc_plants.index.intersection(bid_stats.index)]
 
         roc_avail['roc_value'] = bid_stats.loc[roc_avail.index, 'mean']
@@ -145,57 +131,25 @@ if __name__ == '__main__':
         # estimate roc values for the remaining plants
         truncation_quantile = len(roc_avail) / len(all_roc_plants)
 
-        print(roc_avail)
-        print(truncation_quantile)
-        print(roc_avail['roc_value'].mean())
-        print(roc_avail['roc_value'].std())
-        
-        max_tries = 100
-        tries = 0
-        
-        # numerically fast but unstable, try multiple times
-        while tries < max_tries:
-            try:
-                mu_est, sigma_est = estimate_normal_params_truncated(
-                    roc_avail['roc_value'].values,
-                    truncation_quantile
-                    )
-                break
-            except RuntimeError:
-                tries += 1
-        
-        if tries == max_tries:
-            raise RuntimeError('Optimization failed too many times.')
+        mu_est, sigma_est = estimate_normal_params_truncated(
+            roc_avail['roc_value'].values,
+            truncation_quantile
+            )
 
         ppf = stats.norm.ppf(truncation_quantile, loc=mu_est, scale=sigma_est)    
 
         needed = len(all_roc_plants) - len(roc_avail)
-
         sample_roc = np.random.normal(size=10_000, loc=mu_est, scale=sigma_est)
         
-        print('----------------------------')   
-        print(len(all_roc_plants))
-        print(len(roc_avail))
-
-        print('----------------------------')
-        print(len(sample_roc[sample_roc >= ppf]))
         sample_roc = sample_roc[sample_roc >= ppf][:needed]
-
-        print('sample_roc')
-        print(sample_roc)
-        print(sample_roc.shape)
-
-        print('missing idx')
-        print(all_roc_plants.index.difference(roc_avail.index))
-        print(all_roc_plants.index.difference(roc_avail.index).shape)
-
 
         roc_values.append(
             pd.DataFrame(
-                {'mean': sample_roc},
+                {'roc_value': sample_roc},
                 index=all_roc_plants.index.difference(roc_avail.index),
             )
         )
 
-    roc_values = pd.concat(roc_values)    
-    print(roc_values)
+    pd.concat(roc_values).to_csv(snakemake.output[0])
+
+    
