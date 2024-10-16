@@ -35,3 +35,34 @@ rule build_base:
         "../envs/environment.yaml",
     script:
         "../scripts/build_base.py"
+
+
+rule build_cfds:
+    input:
+        "data/cfd_registers/CFD_Register_Dec_9_2021.xlsx",
+        "data/cfd_registers/CFD_Register_Jan_21_2022.xlsx",
+        "data/cfd_registers/CFD_Register_April_11_2022.xlsx",
+        "data/cfd_registers/CFD_Register_July_5_2022.xlsx",
+        "data/cfd_registers/CFD_Register_Sep_27_2022.xlsx",
+        "data/cfd_registers/CFD_Register_Dec_5_2022.xlsx",
+        "data/cfd_registers/CFD_Register_Mar_29_2023.xlsx",
+        "data/cfd_registers/CFD_Register_Jun_30_2023.xlsx",
+        "data/cfd_registers/CFD_Register_Sep_29_2023.xlsx",
+        "data/cfd_registers/CFD_Register_Jan_2_2024.xlsx",
+        "data/cfd_registers/CFD_Register_Jan_24_2024.xlsx",
+        "data/cfd_registers/CFD_Register_Apr_3_2024.xlsx",
+        "data/cfd_registers/CfD_Register_2024-07-03.xlsx",
+        "data/cfd_registers/CfD_Register_2024-09-10.xlsx",
+        "data/cfd_registers/CfD_Register_2024-09-18.xlsx",
+        bmu_locations="data/temp_located_bmus.csv",
+        bmu_mappings="data/cfd_registers/cfd_to_bm_unit_mapping.csv",
+    output:
+        cfd_strike_prices="resources/cfd_strike_prices.csv",
+    resources:
+        mem_mb=4000,
+    log:
+        "../logs/cfds.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../scripts/build_cfds.py"
