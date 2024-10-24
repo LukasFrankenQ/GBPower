@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
         if d.endswith('.csv'):
             continue
-          
+
         try:
             bids.append(
                 pd.read_csv(Path(d) / 'bids.csv', index_col=[0,1]
