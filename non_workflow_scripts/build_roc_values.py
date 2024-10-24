@@ -17,6 +17,11 @@ The script samples these missing values from an estimated distribution of all
 ROC values where we consider the existing values to be sampled from a lower
 quantile of the distribution. See fct `estimate_normal_params_truncated`.
 
+The script also estimates ROC levels for cascading hydro.
+We note that our data suggests that cascading hydro plants are bidding
+with a typical ROC-induced behaviour only until around March 2024.
+Currently, no method is in place to account for this change in behaviour.
+
 """
 
 import logging
@@ -117,6 +122,8 @@ if __name__ == '__main__':
     
     roc_values = []
 
+    logger.info('Estimating ROC values for wind farms.')
+
     for carrier in ['onwind', 'offwind']:
 
         # obtain roc levels from bids where bid data is available
@@ -149,6 +156,25 @@ if __name__ == '__main__':
                 index=all_roc_plants.index.difference(roc_avail.index),
             )
         )
+
+    logger.info('Estimating ROC values for cascading hydro.')
+
+    cascading_hydro = bmus.loc[bmus['carrier'] == 'cascade'].index
+
+    def build_cascading_roc_prices(bids, name):
+
+        end_date = pd.Timestamp('2024-03-01', tz='utc')
+        bids = bids.copy().loc[:end_date, name]
+        return bids.value_counts().index[0]
+
+    bid_prices.index = pd.to_datetime(bid_prices.index.get_level_values(0))
+
+    cascade_roc_values = pd.Series(
+        {name: build_cascading_roc_prices(bid_prices, name) for name in cascading_hydro},
+        name='roc_value'
+    )
+
+    roc_values.append(cascade_roc_values)
 
     pd.concat(roc_values).to_csv(snakemake.output[0])
 

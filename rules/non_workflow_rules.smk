@@ -35,7 +35,7 @@ rule build_roc_values:
         )(
             __import__('glob')
         ),
-        bmu_locations="data/temp_located_bmus.csv",
+        bmu_locations="data/bmus_prepared.csv",
         cfd_strike_prices="resources/cfd_strike_prices.csv",
     output:
         protected("data/roc_values.csv")
