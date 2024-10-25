@@ -9,7 +9,7 @@
 # are not run.
 # To run them, remove the protected() function from the output directive of each rule.
 
-import datetime
+from datetime import datetime, timedelta
 
 
 rule build_europe_day_ahead_prices:
@@ -92,7 +92,7 @@ rule build_dispatchable_costs:
 rule process_day:
     input:
         lambda wildcards: 'input/week{week}.txt'.format(
-            week=datetime.datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]
+            week=datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]
         )
     output:
         'data/test/{day}.txt'
@@ -100,35 +100,35 @@ rule process_day:
         'your_command_here --input {input} --output {output}'
 
 
-from datetime import datetime, timedelta
 
 def get_input_files(wildcards):
     year = int(wildcards.year)
     week = int(wildcards.week)
-    
-    # Get the starting date (Monday) of the specified ISO week
+
     week_start = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u")
-    
-    # Calculate the 30 days preceding the week_start
+
     dates = [week_start - timedelta(days=i) for i in range(1, 31)]
-    
-    # Define the first date of 2022
+
     first_date_of_2022 = datetime(2022, 1, 1)
-    
+
     # Check if any date is before 2022-01-01
     if any(date < first_date_of_2022 for date in dates):
         # Use the first 30 days of 2022 instead
         dates = [first_date_of_2022 + timedelta(days=i) for i in range(30)]
-    
-    # Generate input file paths based on the dates
-    file_paths = [f'input/{date.strftime("%Y-%m-%d")}.txt' for date in dates]
-    
+
+    file_paths = (
+        [f'data/base/{date.strftime("%Y-%m-%d")}/physical_notifications.csv' for date in dates] +
+        [f'data/base/{date.strftime("%Y-%m-%d")}/day_ahead_prices.csv' for date in dates]
+
+    )
     return file_paths
 
-rule process_week:
+
+rule build_thermal_generator_prices:
     input:
-        get_input_files
+        get_input_files,
+        bmus='data/bmus_prepared.csv',
     output:
-        'data/test/{year}-{week}.txt'
+        'resources/thermal_costs/{year}-{week}.csv'
     shell:
         'your_command_here --input {input} --output {output}'
