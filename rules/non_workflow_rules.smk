@@ -9,6 +9,8 @@
 # are not run.
 # To run them, remove the protected() function from the output directive of each rule.
 
+import datetime
+
 
 rule build_europe_day_ahead_prices:
     run:
@@ -81,3 +83,52 @@ rule build_nuclear_bidding_cost:
         "../envs/environment.yaml",
     script:
         "../non_workflow_scripts/build_nuclear_bidding_cost.py"
+
+
+rule build_dispatchable_costs:
+
+
+
+rule process_day:
+    input:
+        lambda wildcards: 'input/week{week}.txt'.format(
+            week=datetime.datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]
+        )
+    output:
+        'data/test/{day}.txt'
+    shell:
+        'your_command_here --input {input} --output {output}'
+
+
+from datetime import datetime, timedelta
+
+def get_input_files(wildcards):
+    year = int(wildcards.year)
+    week = int(wildcards.week)
+    
+    # Get the starting date (Monday) of the specified ISO week
+    week_start = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u")
+    
+    # Calculate the 30 days preceding the week_start
+    dates = [week_start - timedelta(days=i) for i in range(1, 31)]
+    
+    # Define the first date of 2022
+    first_date_of_2022 = datetime(2022, 1, 1)
+    
+    # Check if any date is before 2022-01-01
+    if any(date < first_date_of_2022 for date in dates):
+        # Use the first 30 days of 2022 instead
+        dates = [first_date_of_2022 + timedelta(days=i) for i in range(30)]
+    
+    # Generate input file paths based on the dates
+    file_paths = [f'input/{date.strftime("%Y-%m-%d")}.txt' for date in dates]
+    
+    return file_paths
+
+rule process_week:
+    input:
+        get_input_files
+    output:
+        'data/test/{year}-{week}.txt'
+    shell:
+        'your_command_here --input {input} --output {output}'
