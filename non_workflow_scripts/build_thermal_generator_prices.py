@@ -4,11 +4,20 @@
 #
 # SPDX-License-Identifier: MIT
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+import sys
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from scipy.signal import argrelextrema
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+
+sys.path.append(str(Path.cwd() / 'scripts'))
+from _helpers import configure_logging
 
 
 def get_extremes(dispatch, mode='on', neighbour_filter=10):
@@ -130,3 +139,55 @@ def get_price_distribution(dispatch, prices, visval=False, **kwargs):
         return np.nan
     else:
         return avg_prices
+
+
+if __name__ == '__main__':
+
+    configure_logging(snakemake)
+
+    dah = []
+    pns = []
+
+    for fn in snakemake.input:
+
+        if 'day_ahead_prices.csv' in fn:
+            dah.append(pd.read_csv(fn, index_col=0, parse_dates=True))
+        elif 'physical_notifications.csv' in fn:
+            pns.append(pd.read_csv(fn, index_col=0, parse_dates=True))
+
+
+    dah = pd.concat(dah).sort_index()
+    pns = pd.concat(pns).sort_index()
+
+    bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
+
+    thermal_gens = bmus.loc[bmus['carrier'] == 'fossil'].index
+
+    prices = {}
+
+    for i, thermal_gen in enumerate(thermal_gens):
+
+        if thermal_gen not in pns.columns:
+            continue
+
+        pcs = get_price_distribution(
+            pns[thermal_gen],
+            dah['day-ahead-prices'],
+            visval=False
+            )
+
+        prices[thermal_gen] = np.mean(pcs)
+
+    prices = pd.Series(prices)
+
+    missing = prices.isna()
+
+    samples = np.random.normal(
+        loc=prices.mean() + 2*prices.std(),
+        scale=prices.std(),
+        size=missing.sum()
+        )
+
+    prices.loc[missing] = samples
+
+    prices.to_csv(snakemake.output[0])

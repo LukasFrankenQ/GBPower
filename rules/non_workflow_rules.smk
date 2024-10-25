@@ -129,6 +129,12 @@ rule build_thermal_generator_prices:
         get_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        'resources/thermal_costs/{year}-{week}.csv'
-    shell:
-        'your_command_here --input {input} --output {output}'
+        protected('resources/thermal_costs/{year}-{week}.csv')
+    resources:
+        mem_mb=4000,
+    log:
+        '../logs/thermal_costs/{year}-{week}.log',
+    conda:
+        '../envs/environment.yaml',
+    script:
+        '../non_workflow_scripts/build_thermal_generator_prices.py'
