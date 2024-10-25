@@ -180,6 +180,7 @@ if __name__ == '__main__':
 
     prices = pd.Series(prices)
 
+    # fill missing values with random samples from (upward-shifted) normal distribution
     missing = prices.isna()
 
     samples = np.random.normal(
