@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 import sys
 import numpy as np
 import pandas as pd
+from tqdm import tqdm 
 from pathlib import Path
 from scipy.signal import argrelextrema
 from sklearn.preprocessing import MinMaxScaler
@@ -161,34 +162,39 @@ if __name__ == '__main__':
 
     bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
 
-    thermal_gens = bmus.loc[bmus['carrier'] == 'fossil'].index
+    prices = []
 
-    prices = {}
+    for carrier in ['fossil', 'biomass']:
 
-    for i, thermal_gen in enumerate(thermal_gens):
+        logger.info(f'Estimating wholesale price of {carrier} generators.')
 
-        if thermal_gen not in pns.columns:
-            continue
+        carrier_prices = pd.Series()
+        gens = bmus.loc[bmus['carrier'] == carrier].index
 
-        pcs = get_price_distribution(
-            pns[thermal_gen],
-            dah['day-ahead-prices'],
-            visval=False
+        for gen_name in tqdm(gens):
+
+            if gen_name not in pns.columns:
+                continue
+
+            pcs = get_price_distribution(
+                pns[gen_name],
+                dah['day-ahead-prices'],
+                visval=False
+                )
+
+            carrier_prices.loc[gen_name] = np.mean(pcs)
+
+        # fill missing values with random samples from (upward-shifted) normal distribution
+        missing = carrier_prices.isna()
+
+        samples = np.random.normal(
+            loc=carrier_prices.mean() + 2*carrier_prices.std(),
+            scale=carrier_prices.std(),
+            size=missing.sum()
             )
 
-        prices[thermal_gen] = np.mean(pcs)
+        carrier_prices.loc[missing] = samples
 
-    prices = pd.Series(prices)
+        prices.append(carrier_prices)
 
-    # fill missing values with random samples from (upward-shifted) normal distribution
-    missing = prices.isna()
-
-    samples = np.random.normal(
-        loc=prices.mean() + 2*prices.std(),
-        scale=prices.std(),
-        size=missing.sum()
-        )
-
-    prices.loc[missing] = samples
-
-    prices.to_csv(snakemake.output[0])
+    pd.concat(prices).to_csv(snakemake.output[0])

@@ -129,7 +129,7 @@ rule build_thermal_generator_prices:
         get_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        protected('resources/thermal_costs/{year}-{week}.csv')
+        protected('resources/thermal_costs/{year}-week{week}.csv')
     resources:
         mem_mb=4000,
     log:
