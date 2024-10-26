@@ -298,7 +298,6 @@ def build_bm_actions_period(action, volumes, trades, date, period):
         row = unit_volumes[['dataType'] + cols]
         row = (
             row.loc[row['dataType'] == 'Tagged', cols]
-            # .fillna(value=0)
             .replace(np.nan, 0)
             .abs()
             .max()
