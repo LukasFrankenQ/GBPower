@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Obtain the battery capacities from the physical notifications DataFrame. 
+Obtain the battery and PHS capacities from the physical notifications DataFrame. 
 For charging and discharging, the maximum and minimum values are taken, respectively.
 Energy capacity is assumed to equal the volume of maximum continuous charging.
 """
@@ -21,9 +21,9 @@ sys.path.append(str(Path.cwd() / 'scripts'))
 from _helpers import configure_logging
 
 
-def get_battery_capacities(name, pns):
+def get_capacities(name, pns):
     """
-    Obtain the battery capacities from the physical notifications DataFrame. 
+    Obtain energy + power capacities from the physical notifications DataFrame. 
     For charging and discharging, the maximum and minimum values are taken, respectively.
     Energy capacity is assumed to equal the maximum volume of continuous charging.
 
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     configure_logging(snakemake)
 
-    logger.info('Estimating battery power and energy capacities.')
+    logger.info('Estimating battery and PHS power and energy capacities.')
 
     pns = []
     for d in tqdm(snakemake.input):
@@ -107,13 +107,13 @@ if __name__ == '__main__':
 
     bmus = pd.read_csv(snakemake.input['bmu_locations'], index_col=0)
 
-    batteries = bmus.loc[bmus['carrier'] == 'battery'].index
+    assets = bmus.loc[bmus['carrier'].isin(['battery', 'PHS'])].index
 
     power_caps = []
     energy_caps = []
 
-    for name in tqdm(batteries):
-        power_cap, energy_cap = get_battery_capacities(name, pns)
+    for name in tqdm(assets):
+        power_cap, energy_cap = get_capacities(name, pns)
 
         power_caps.append(power_cap)
         energy_caps.append(energy_cap)
@@ -122,7 +122,7 @@ if __name__ == '__main__':
             'power_cap[MW]': power_caps,
             'energy_cap[MWh]': energy_caps,
         },
-        index=batteries
+        index=assets
     )
 
     capacities.to_csv(snakemake.output[0])

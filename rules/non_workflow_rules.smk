@@ -85,7 +85,7 @@ rule build_nuclear_bidding_cost:
         "../non_workflow_scripts/build_nuclear_bidding_cost.py"
 
 
-rule build_battery_capacities:
+rule build_battery_phs_capacities:
     input:
         # Estimates battery power and energy capacities based on a large dataset of
         # historic physical notifications.
@@ -108,15 +108,15 @@ rule build_battery_capacities:
         ),
         bmu_locations="data/bmus_prepared.csv",
     output:
-        protected("data/battery_capacities.csv")
+        protected("data/battery_phs_capacities.csv")
     resources:
         mem_mb=4000,
     log:
-        "../logs/build_battery_capacities.log",
+        "../logs/build_battery_phs_capacities.log",
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_battery_capacities.py"
+        "../non_workflow_scripts/build_battery_phs_capacities.py"
 
 
 rule process_day:
