@@ -5,6 +5,7 @@ interconnection_mapper = {
     'IFA2': ['I2D', 'I2G', 'ING'],
     'EastWest': ['IID'],
     'Moyle': ['IMD'],
+    'Nemo': [''],
     'Viking': ['IVD', 'IVG'],
     'ElecLink': ['IED', 'IEG', 'ILD', 'ILG'],
     'NSL': ['ISD', 'ISG'],
