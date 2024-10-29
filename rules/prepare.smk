@@ -9,9 +9,9 @@ rule prepare_network:
         cfd_strike_prices='resources/cfd_strike_prices.csv',
         nuclear_marginal_price='data/nuclear_marginal_cost.csv',
         battery_phs_capacities='data/battery_phs_capacities.csv',
-        thermal_costs=lambda: wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(
+        thermal_costs=lambda wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(
             year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
-            week=datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]
+            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
         day_ahead_prices='data/base/{day}/day_ahead_prices.csv',
         maximum_export_limits='data/base/{day}/maximum_export_limits.csv',

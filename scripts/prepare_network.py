@@ -43,8 +43,8 @@ def add_wind(
         .intersection(pn.columns)
     )
 
-    print(f'Adding {len(plants)} {carrier} generators...')
-    
+    logger.info(f'Adding {len(plants)} {carrier} generators...')
+
     n.add(
         "Generator",
         plants,
@@ -83,7 +83,7 @@ def add_solar(
         .intersection(pn.columns)
     )
 
-    print(f'Adding {len(plants)} solar generators...')
+    logger.info(f'Adding {len(plants)} solar generators...')
 
     n.add(
         "Generator",
@@ -110,7 +110,7 @@ def add_nuclear(
     # these are thrown out
     plants = plants.intersection(pn.columns[pn.mean() > 0])
 
-    print(f'Adding {len(plants)} nuclear generators...')
+    logger.info(f'Adding {len(plants)} nuclear generators...')
     n.add(
         "Generator",
         plants,
@@ -141,7 +141,7 @@ def add_thermal(
         .intersection(pn.columns)
         .intersection(mel.columns)
     )
-    print(f'Adding {len(plants)} thermal generators...')
+    logger.info(f'Adding {len(plants)} thermal generators...')
 
     assert plants.isin(wholesale_prices.index).all(), 'Missing wholesale prices for some thermal plants.'    
 
@@ -169,7 +169,7 @@ def add_temporal_flexibility(
 
     assets = assets.intersection(pn.columns).intersection(mel.columns)
 
-    print(f'Adding {len(assets)} {carrier} storage units...')
+    logger.info(f'Adding {len(assets)} {carrier} storage units...')
     # times two because time step is 30 minutes and max_hours does not
     # refer to hours but time steps within the context of the network's
     # time scale
@@ -218,7 +218,7 @@ def add_hydropower(
         .intersection(pn.columns)
     )
 
-    print(f'Adding {len(assets)} {carrier} generators...')
+    logger.info(f'Adding {len(assets)} {carrier} generators...')
 
     if carrier == 'cascade':
         marginal_costs = - roc_values.loc[assets]
@@ -257,7 +257,7 @@ def add_interconnectors(
         interconnection_countries,
     ):
 
-    print(f'Adding {len(interconnection_mapper)} interconnectors...')
+    logger.info(f'Adding {len(interconnection_mapper)} interconnectors...')
 
     for (ic, bmu_names) in interconnection_mapper.items():
 
@@ -352,12 +352,10 @@ def build_static_supply_curve(
         interconnection_countries,
         )
     
-    print('\n')
-    
 
 def add_load(n, pns):
 
-    print('Adding load...')
+    logger.info('Adding load...')
     n.add(
         "Load",
         "load",
@@ -398,19 +396,18 @@ if __name__ == '__main__':
         parse_dates=True
         )
 
-    day_ahead_prices = (
-        pd.read_csv(
-            snakemake.input["day_ahead_prices"],
-            index_col=0
-            )
-        .iloc[:,0]
-    )
-
     # pypsa does not like datetime indices and their timezones
     pn.index = pn.index.values
     mel.index = mel.index.values
     europe_day_ahead_prices.index = europe_day_ahead_prices.index.values
-    day_ahead_prices.index = day_ahead_prices.index.values
+
+    thermal_costs = (
+        pd.read_csv(
+            snakemake.input["thermal_costs"],
+            index_col=0
+            )
+        .iloc[:,0]
+    )
 
     cfd_strike_prices = (
         pd.read_csv(
@@ -442,7 +439,7 @@ if __name__ == '__main__':
 
     battery_phs_capacities = (
         pd.read_csv(
-            snakemake.input["battery_PHS_capacities"],
+            snakemake.input["battery_phs_capacities"],
             index_col=0
         )
     )
@@ -461,7 +458,7 @@ if __name__ == '__main__':
         bmus,
         pn,
         mel,
-        day_ahead_prices,
+        thermal_costs,
         europe_day_ahead_prices,
         cfd_strike_prices,
         roc_values,
