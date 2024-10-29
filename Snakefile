@@ -17,3 +17,4 @@ configfile: "config.yaml"
 
 include: "rules/retrieve.smk"
 include: "rules/non_workflow_rules.smk"
+include: "rules/prepare.smk"
