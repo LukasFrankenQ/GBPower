@@ -5,6 +5,9 @@ from functools import partial
 from requests.exceptions import HTTPError
 
 
+REGION_COLS = ["geometry", "name", "x", "y", "country"]
+
+
 def to_date_period(dt):
     assert dt.tz is not None, 'Datetime must have timezone'
     dt = dt.tz_convert('Europe/London')

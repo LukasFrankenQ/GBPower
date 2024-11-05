@@ -168,3 +168,23 @@ rule build_thermal_generator_prices:
         '../envs/environment.yaml',
     script:
         '../non_workflow_scripts/build_thermal_generator_prices.py'
+
+
+rule build_bus_regions:
+    input:
+        base_network="data/base.nc",
+        total_shape="data/gb_shape.geojson",
+        offshore_shapes="data/offshore_shapes.geojson",
+    output:
+        regions_onshore=protected("data/regions_onshore.geojson"),
+        regions_offshore=protected("data/regions_offshore.geojson"),
+    log:
+        "../logs/build_bus_regions.log",
+    threads: 1
+    resources:
+        mem_mb=1000,
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../non_workflow_scripts/build_bus_regions.py"
+
