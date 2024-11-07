@@ -35,10 +35,21 @@ def plot_merit_order(n, period):
     ints_marginal_cap = []
 
     for ic, country in interconnection_countries.items():
-        ints_marginal_cost.append(
-            n.generators_t.marginal_cost[country.lower() + '_local_market'].iloc[period]
-            )
-        ints_marginal_cap.append(n.links.p_nom.loc[ic])
+        try:
+            mc = (
+                n.generators_t
+                .marginal_cost[country.lower() + '_local_market']
+                .iloc[period]
+                )
+            cap = n.links.p_nom.loc[ic]
+
+            ints_marginal_cost.append(mc)
+            ints_marginal_cap.append(cap)
+
+        except KeyError:
+            ints_marginal_cap.append(0.)
+            ints_marginal_cost.append(0.)
+
 
     df = pd.concat((
         n.generators[['marginal_cost', 'p_nom', 'carrier']],
