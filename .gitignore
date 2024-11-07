@@ -1,6 +1,7 @@
 results/
 resources/
 data/bundle/
+data/base/
 
 scripts/__pycache__/
 scripts/_tokens.py

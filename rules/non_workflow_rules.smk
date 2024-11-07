@@ -196,7 +196,7 @@ rule build_load_weights:
         gsp_regions_lookup="data/gsp_gnode_directconnect_region_lookup.csv",
         demandpeaks="data/FES-2021--Leading_the_Way--demandpk-all--gridsupplypoints.csv",
     output:
-        load_weights=protected("data/load_weights.csv"),
+        load_weights=protected("data/preprocessed/load_weights.csv"),
     log:
         "../logs/build_load_weights.log",
     threads: 1
