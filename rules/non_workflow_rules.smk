@@ -172,7 +172,7 @@ rule build_thermal_generator_prices:
 
 rule build_bus_regions:
     input:
-        base_network="data/base.nc",
+        base_network="data/raw/lmp_base.nc",
         total_shape="data/gb_shape.geojson",
         offshore_shapes="data/offshore_shapes.geojson",
     output:

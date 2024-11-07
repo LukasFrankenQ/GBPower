@@ -4,6 +4,7 @@
 
 rule prepare_network:
     input:
+        network='data/raw/lmp_base.nc',
         roc_values='data/roc_values.csv',
         bmus='data/bmus_prepared.csv',
         cfd_strike_prices='resources/cfd_strike_prices.csv',
