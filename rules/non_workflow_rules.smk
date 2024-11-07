@@ -206,3 +206,22 @@ rule build_load_weights:
         "../envs/environment.yaml"
     script:
         "../non_workflow_scripts/build_load_weights.py"
+
+
+rule prepare_bmus:
+    input:
+        regions_onshore="data/regions_onshore.geojson",
+        regions_offshore="data/regions_offshore.geojson",
+        bmus_locs="data/raw/bmunits_loc.csv",
+        bmus_raw="data/raw/temp_located_bmus.csv",
+    output:
+        bmus=protected("data/preprocessed/prepared_bmus.csv"),
+    log:
+        "../logs/prepare_bmus.log",
+    threads: 1
+    resources:
+        mem_mb=1000,
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../non_workflow_scripts/prepare_bmus.py"
