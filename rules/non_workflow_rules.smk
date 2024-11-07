@@ -206,4 +206,3 @@ rule build_load_weights:
         "../envs/environment.yaml"
     script:
         "../non_workflow_scripts/build_load_weights.py"
-
