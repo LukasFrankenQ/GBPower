@@ -178,8 +178,8 @@ if __name__ == '__main__':
     bmus = bmus.loc[bmus['lon'] != 0]
 
     # assign network nodes
-    regions_onshore = gpd.read_file(snakemake.input["regions_onshore"])
-    regions_offshore = gpd.read_file(snakemake.input["regions_offshore"])
+    regions_onshore = gpd.read_file(snakemake.input["regions_onshore"]).set_index('name')
+    regions_offshore = gpd.read_file(snakemake.input["regions_offshore"]).set_index('name')
 
     mapper = bmus.loc[bmus['lon'] != 'distributed']
 
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     joined = (
         joined
         [~joined.index.duplicated(keep='first')]
-        .rename(columns={'index_right': 'bus'})
+        .rename(columns={'name': 'bus'})
         [['carrier', 'lon', 'lat', 'bus']]
     )
 

@@ -35,3 +35,12 @@ interconnection_countries = {
     'NSL': 'Norway',
     'Nemo': 'Belgium',
 }
+
+country_coords = {
+    'France': (-1.71, 49.64),
+    'Belgium': (3.12, 51.23),
+    'Ireland': (-6.19, 53.51),
+    'Netherlands': (3.56, 51.53),
+    'Denmark': (8.4, 55.43),
+    'Norway': (5.5, 59.02),
+}
