@@ -215,8 +215,7 @@ rule prepare_bmus:
         bmus_locs="data/raw/bmunits_loc.csv",
         bmus_raw="data/raw/temp_located_bmus.csv",
     output:
-        # bmus=protected("data/preprocessed/prepared_bmus.csv"),
-        bmus="data/preprocessed/prepared_bmus.csv",
+        bmus=protected("data/preprocessed/prepared_bmus.csv"),
     log:
         "../logs/prepare_bmus.log",
     threads: 1
