@@ -5,12 +5,14 @@
 rule prepare_network:
     input:
         network='data/raw/lmp_base.nc',
-        roc_values='data/roc_values.csv',
-        bmus='data/bmus_prepared.csv',
+        roc_values='data/preprocessed/roc_values.csv',
+        bmus='data/preprocessed/bmus_prepared.csv',
+        load_weights='data/preprocessed/load_weights.csv',
         cfd_strike_prices='resources/cfd_strike_prices.csv',
         nuclear_marginal_price='data/nuclear_marginal_cost.csv',
-        battery_phs_capacities='data/battery_phs_capacities.csv',
-        thermal_costs=lambda wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(
+        battery_phs_capacities='data/preprocessed/battery_phs_capacities.csv',
+        interconnection_helpers='data/interconnection_helpers.yaml',
+        thermal_generation_costs=lambda wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(
             year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
