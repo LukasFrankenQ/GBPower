@@ -1,8 +1,12 @@
 import time
+import yaml
 import pandas as pd
+import networkx as nx
 from pathlib import Path
 from functools import partial
 from requests.exceptions import HTTPError
+
+from snakemake.utils import update_config
 
 
 REGION_COLS = ["geometry", "name", "x", "y", "country"]
@@ -165,3 +169,117 @@ def configure_logging(snakemake, skip_handlers=False):
         )
 
     sys.excepthook = handle_exception
+
+
+def calculate_annuity(n, r):
+    """
+    Calculate the annuity factor for an asset with lifetime n years and.
+
+    discount rate of r, e.g. annuity(20, 0.05) * 20 = 1.6
+    """
+    if isinstance(r, pd.Series):
+        return pd.Series(1 / n, index=r.index).where(
+            r == 0, r / (1.0 - 1.0 / (1.0 + r) ** n)
+        )
+    elif r > 0:
+        return r / (1.0 - 1.0 / (1.0 + r) ** n)
+    else:
+        return 1 / n
+
+
+def update_p_nom_max(n):
+    # if extendable carriers (solar/onwind/...) have capacity >= 0,
+    # e.g. existing assets from the OPSD project are included to the network,
+    # the installed capacity might exceed the expansion limit.
+    # Hence, we update the assumptions.
+
+    n.generators.p_nom_max = n.generators[["p_nom_min", "p_nom_max"]].max(1)
+
+
+def load_costs(tech_costs, config, max_hours, Nyears=1.0):
+    # set all asset costs and other parameters
+    costs = pd.read_csv(tech_costs, index_col=[0, 1]).sort_index()
+
+    # correct units to MW
+    costs.loc[costs.unit.str.contains("/kW"), "value"] *= 1e3
+    costs.unit = costs.unit.str.replace("/kW", "/MW")
+
+    fill_values = config["fill_values"]
+    costs = costs.value.unstack().fillna(fill_values)
+
+    costs["capital_cost"] = (
+        (
+            calculate_annuity(costs["lifetime"], costs["discount rate"])
+            + costs["FOM"] / 100.0
+        )
+        * costs["investment"]
+        * Nyears
+    )
+    costs.at["OCGT", "fuel"] = costs.at["gas", "fuel"]
+    costs.at["CCGT", "fuel"] = costs.at["gas", "fuel"]
+
+    costs["marginal_cost"] = costs["VOM"] + costs["fuel"] / costs["efficiency"]
+
+    costs = costs.rename(columns={"CO2 intensity": "co2_emissions"})
+
+    costs.at["OCGT", "co2_emissions"] = costs.at["gas", "co2_emissions"]
+    costs.at["CCGT", "co2_emissions"] = costs.at["gas", "co2_emissions"]
+
+    costs.at["solar", "capital_cost"] = (
+        config["rooftop_share"] * costs.at["solar-rooftop", "capital_cost"]
+        + (1 - config["rooftop_share"]) * costs.at["solar-utility", "capital_cost"]
+    )
+
+    def costs_for_storage(store, link1, link2=None, max_hours=1.0):
+        capital_cost = link1["capital_cost"] + max_hours * store["capital_cost"]
+        if link2 is not None:
+            capital_cost += link2["capital_cost"]
+        return pd.Series(
+            dict(capital_cost=capital_cost, marginal_cost=0.0, co2_emissions=0.0)
+        )
+
+    costs.loc["battery"] = costs_for_storage(
+        costs.loc["battery storage"],
+        costs.loc["battery inverter"],
+        max_hours=6,
+    )
+    costs.loc["H2"] = costs_for_storage(
+        costs.loc["hydrogen storage underground"],
+        costs.loc["fuel cell"],
+        costs.loc["electrolysis"],
+        max_hours=168,
+    )
+
+    for attr in ("marginal_cost", "capital_cost"):
+        overwrites = config.get(attr)
+        if overwrites is not None:
+            overwrites = pd.Series(overwrites)
+            costs.loc[overwrites.index, attr] = overwrites
+
+    return costs
+
+
+def set_scenario_config(snakemake):
+    scenario = snakemake.config["run"].get("scenarios", {})
+    if scenario.get("enable") and "run" in snakemake.wildcards.keys():
+        try:
+            with open(scenario["file"], "r") as f:
+                scenario_config = yaml.safe_load(f)
+        except FileNotFoundError:
+            # fallback for mock_snakemake
+            script_dir = Path(__file__).parent.resolve()
+            root_dir = script_dir.parent
+            with open(root_dir / scenario["file"], "r") as f:
+                scenario_config = yaml.safe_load(f)
+        update_config(snakemake.config, scenario_config[snakemake.wildcards.run])
+
+
+def check_network_consistency(n):
+    """Checks if the network is one connected graph. Returns isolated buses"""
+
+    graph = n.graph()
+    connected_components = list(nx.connected_components(graph))
+
+    main_system = max(connected_components, key=len)
+
+    return n.buses.loc[~n.buses.index.isin(main_system)].index.tolist()

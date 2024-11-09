@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-rule prepare_network:
+rule add_electricity:
     input:
         network='data/raw/lmp_base.nc',
         roc_values='data/preprocessed/roc_values.csv',
@@ -30,3 +30,25 @@ rule prepare_network:
         "../envs/environment.yaml",
     script:
         "../scripts/prepare_network.py"
+
+
+rule simplify_network:
+    input:
+        network="results/prenetworks/{day}/network_nodal.nc",
+        regions_onshore="data/regions_onshore.geojson",
+        regions_offshore="data/regions_offshore.geojson",
+        tech_costs="data/costs_2020.csv",
+    output:
+        network="results/prenetworks/{day}/network_nodal_s.nc",
+        regions_onshore="results/prenetworks/{day}/regions_onshore_s.geojson",
+        regions_offshore="results/prenetworks/{day}/regions_offshore_s.geojson",
+        busmap="results/prenetworks/{day}/busmap_s.csv",
+        # connection_costs=RESOURCES + "live_data/{date}_{period}/connection_costs_s.csv",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/prenetworks/{day}_s.log",  
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/simplify_network.py"

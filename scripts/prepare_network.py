@@ -355,8 +355,6 @@ def add_interconnectors(
 
     logger.info(f'Adding {len(interconnection_mapper)} interconnectors...')
 
-    # for ic in ['BritNed']: 
-    # for ic in ['IFA2']: 
     for (ic, ic_bmunits) in interconnection_mapper.items():
 
         p_nom = interconnection_capacities[ic]
@@ -534,6 +532,8 @@ def add_carriers(n, bmus, interconnection_countries):
     n.add("Carrier", bmus['carrier'].unique())
     n.add("Carrier", "load")
     n.add("Carrier", "electricity")
+    n.add("Carrier", "AC")
+    n.add("Carrier", "DC")
     n.add("Carrier", "local_market")
     n.add("Carrier", list(set(interconnection_countries.values())))
 
