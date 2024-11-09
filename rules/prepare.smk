@@ -6,10 +6,10 @@ rule prepare_network:
     input:
         network='data/raw/lmp_base.nc',
         roc_values='data/preprocessed/roc_values.csv',
-        bmus='data/preprocessed/bmus_prepared.csv',
+        bmus='data/preprocessed/prepared_bmus.csv',
         load_weights='data/preprocessed/load_weights.csv',
-        cfd_strike_prices='resources/cfd_strike_prices.csv',
-        nuclear_marginal_price='data/nuclear_marginal_cost.csv',
+        cfd_strike_prices='data/preprocessed/cfd_strike_prices.csv',
+        nuclear_marginal_price='data/preprocessed/nuclear_marginal_cost.csv',
         battery_phs_capacities='data/preprocessed/battery_phs_capacities.csv',
         interconnection_helpers='data/interconnection_helpers.yaml',
         thermal_generation_costs=lambda wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(

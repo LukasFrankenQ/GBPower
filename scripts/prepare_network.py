@@ -9,34 +9,16 @@ Inserts generation, storage and loads into the network
 """
 
 
-
-
 import logging
 
 logger = logging.getLogger(__name__)
 
-import os
-import sys
 import yaml
 import pypsa
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-from pathlib import Path
-from datetime import datetime
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
 
-from _plotting_helpers import (
-    plot_merit_order,
-    generation_mix_to_ax
-)
 from _helpers import configure_logging
-
-with open(Path.cwd().parent / 'config.yaml') as f:
-    config = yaml.safe_load(f)
-    tech_colors = config['tech_colors']
-    nice_names = config['nice_names']
 
 
 def scale_merit_order(n, dah, collective=True):
@@ -393,7 +375,7 @@ def add_interconnectors(
                 'bus']
             
             if inter_flow.empty:
-                logger.info('No interconnector flow data for', ic)
+                logger.info(f'No interconnector flow data for {ic}')
                 continue
 
             gb_bus = inter_flow.value_counts().index[0]
@@ -411,7 +393,7 @@ def add_interconnectors(
 
 
             if (flow == 0).all():
-                logger.info('No interconnector flow data for', ic)
+                logger.info(f'No interconnector flow data for {ic}')
                 continue
 
         # this setup simulates a local market for each country that
@@ -663,6 +645,6 @@ if __name__ == '__main__':
         country_coords,
         )
 
-    m = n.generators_t.marginal_cost 
-
     scale_merit_order(n, dah, collective=True)
+
+    n.export_to_netcdf(snakemake.output['network'])

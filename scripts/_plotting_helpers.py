@@ -6,11 +6,19 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict
 from matplotlib.patches import Patch
 
-
 script_path = Path(__file__).resolve()
-sys.path.append(str(script_path.parent.parent))
 
-from data.interconnection_helpers import interconnection_countries
+with open(
+        script_path.parent.parent /
+        'data' /
+        'interconnection_helpers.yaml', 'r'
+    ) as f:
+    data = yaml.safe_load(f)
+
+interconnection_countries = data['interconnection_countries']
+interconnection_mapper = data['interconnection_mapper']
+interconnection_capacities = data['interconnection_capacities']
+country_coords = data['country_coords']
 
 with open(script_path.parent.parent / 'config.yaml', 'r') as f:
 
