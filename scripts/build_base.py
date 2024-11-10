@@ -192,6 +192,7 @@ trades_url = (
         'all?settlementDate={}&settlementPeriod={}&format=csv'
     )
 
+
 def get_accepted_units(date, period, so_only=False):
 
     response = requests.get(accepts_url.format(date, period))
@@ -210,8 +211,10 @@ def get_accepted_units(date, period, so_only=False):
         ss = ss.loc[ss.AcceptanceTime == ss.AcceptanceTime.max()]
         corrected.append(ss)
 
-    acc = pd.concat(corrected)
-    return acc.NationalGridBmUnit.unique()
+    try:
+        return pd.concat(corrected).NationalGridBmUnit.unique()
+    except ValueError:
+        return np.array([], dtype=str)
 
 
 def get_volumes(date, period):
@@ -286,6 +289,13 @@ def build_bm_actions_period(action, volumes, trades, date, period):
             return df.loc[df.PairId < 0, 'Bid'].iloc[::-1]
         elif action == 'offers':
             return df.loc[df.PairId > 0, 'Offer']
+
+    if volumes.empty:
+        return pd.DataFrame(
+            columns=pd.MultiIndex.from_product(
+                [[to_datetime(date, period)], ['vol', 'price']]
+            )
+        )
 
     cols = volumes.columns[volumes.columns.str.contains(vol_marker)].tolist()
     detected_actions = list()
