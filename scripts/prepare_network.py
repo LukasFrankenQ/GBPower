@@ -81,6 +81,9 @@ def scale_merit_order(n, dah, collective=True):
         marginal_unit = max_avail_gen[max_avail_gen['cum_p_nom'] > load].iloc[0].name
         mc = max_avail_gen.loc[marginal_unit, 'marginal_cost']
 
+        if isinstance(mc, pd.Series): 
+            mc = mc.iloc[0]
+        
         marginal_unit_cost.loc[dt] = mc
 
         if not collective:
