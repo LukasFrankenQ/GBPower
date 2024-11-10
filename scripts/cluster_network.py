@@ -134,7 +134,7 @@ import geopandas as gpd
 from functools import reduce
 
 from pypsa.clustering.spatial import get_clustering_from_busmap
-from _helpers import configure_logging, update_p_nom_max, set_scenario_config, load_costs
+from _helpers import configure_logging, update_p_nom_max, load_costs
 
 logger = logging.getLogger(__name__)
 
@@ -340,7 +340,7 @@ def clustering_for_n_clusters(
         busmap,
         aggregate_generators_weighted=True,
         aggregate_generators_carriers=aggregate_carriers,
-        aggregate_one_ports=["Load", "StorageUnit"],
+        aggregate_one_ports=["Load"],
         line_length_factor=line_length_factor,
         line_strategies=line_strategies,
         generator_strategies=generator_strategies,
@@ -375,7 +375,7 @@ def cluster_regions(busmaps, input=None, output=None):
         regions_c = regions_c.reset_index()
         
         # if not which == "regions_onshore":
-        regions_c.to_file(getattr(output, which), driver="GeoJSON")
+        # regions_c.to_file(getattr(output, which), driver="GeoJSON")
 
 
 def make_busmap(n, zones):
@@ -385,18 +385,68 @@ def make_busmap(n, zones):
         crs="EPSG:4326",
         )
 
-    return gpd.sjoin(df, zones, how="left", op="within").rename(columns={"index_right": 0})[0]
+    # return gpd.sjoin(df, zones, how="left").rename(columns={"index_right": 0})[0]
+    return df.sjoin(zones, how="left").rename(columns={"name": 0}).dropna()[0]
 
 
 if __name__ == "__main__":
 
     configure_logging(snakemake)
-    set_scenario_config(snakemake)
 
-    params = snakemake.params
-    solver_name = snakemake.config["solving"]["solver"]["name"]
+    solver_name = 'highs'
 
     n = pypsa.Network(snakemake.input.network)
+
+    params = {
+        'cluster_network': {
+            'algorithm': 'kmeans',
+            'feature': 'solar+onwind-time',
+            'exclude_carriers': list(set(
+                n.generators.carrier.unique().tolist() +
+                n.storage_units.carrier.unique().tolist() +
+                n.links.carrier.unique().tolist()
+                )),
+            'consider_efficiency_classes': False,
+            },
+        'aggregation_strategies': {},
+        'renewable_carriers': [
+            'solar',
+            'onwind',
+            'offwind',
+            'hydro',
+            'cascade',
+            'PHS',
+            ],
+        'conventional_carriers': [
+            'nuclear',
+            'fossil',
+            ],
+        'max_hours': {},
+        'length_factor': 1.25,
+        'costs': {
+            "year": 2030,
+            "version": "v0.8.0",
+            "rooftop_share": 0.14,  # based on the potentials, assuming (0.1 kW/m2 and 10 m2/person)
+            "social_discountrate": 0.02,
+            "fill_values": {
+                "FOM": 0,
+                "VOM": 0,
+                "efficiency": 1,
+                "fuel": 0,
+                "investment": 0,
+                "lifetime": 25,
+                "CO2 intensity": 0,
+                "discount rate": 0.07
+            },
+            "marginal_cost": {
+            },
+            "emission_prices": {
+                "enable": False,
+                "co2": 0.0,
+                "co2_monthly_prices": False
+            }
+        }
+    }
 
     if snakemake.wildcards.layout == "nodal":
         n.export_to_netcdf(snakemake.output["network"])
@@ -405,9 +455,9 @@ if __name__ == "__main__":
     # remove integer outputs for compatibility with PyPSA v0.26.0
     n.generators.drop("n_mod", axis=1, inplace=True, errors="ignore")
 
-    exclude_carriers = params.cluster_network["exclude_carriers"]
+    exclude_carriers = params['cluster_network']["exclude_carriers"]
     aggregate_carriers = set(n.generators.carrier) - set(exclude_carriers)
-    conventional_carriers = set(params.conventional_carriers)
+    conventional_carriers = set(params['conventional_carriers'])
 
     target_regions = gpd.read_file(snakemake.input.target_regions).set_index("name")[["geometry"]]
     custom_busmap = make_busmap(n, target_regions)
@@ -416,7 +466,7 @@ if __name__ == "__main__":
 
     n_clusters = custom_busmap.nunique()
 
-    if params.cluster_network.get("consider_efficiency_classes", False):
+    if params['cluster_network'].get("consider_efficiency_classes", False):
         carriers = []
         for c in aggregate_carriers:
             gens = n.generators.query("carrier == @c")
@@ -447,8 +497,8 @@ if __name__ == "__main__":
 
         hvac_overhead_cost = load_costs(
             snakemake.input.tech_costs,
-            params.costs,
-            params.max_hours,
+            params['costs'],
+            params['max_hours'],
             Nyears,
         ).at["HVAC overhead", "capital_cost"]
 
@@ -457,17 +507,17 @@ if __name__ == "__main__":
             n_clusters,
             custom_busmap,
             aggregate_carriers,
-            params.length_factor,
-            params.aggregation_strategies,
+            params['length_factor'],
+            params['aggregation_strategies'],
             solver_name,
-            params.cluster_network["algorithm"],
-            params.cluster_network["feature"],
+            params['cluster_network']["algorithm"],
+            params['cluster_network']["feature"],
             hvac_overhead_cost,
         )
 
     update_p_nom_max(clustering.network)
 
-    if params.cluster_network.get("consider_efficiency_classes"):
+    if params['cluster_network'].get("consider_efficiency_classes"):
         labels = [f" {label} efficiency" for label in ["low", "medium", "high"]]
         nc = clustering.network
         nc.generators["carrier"] = nc.generators.carrier.replace(labels, "", regex=True)

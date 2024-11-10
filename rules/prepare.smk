@@ -21,7 +21,7 @@ rule add_electricity:
         physical_notifications='data/base/{day}/physical_notifications.csv',
         europe_day_ahead_prices='data/base/{day}/europe_day_ahead_prices.csv',
     output:
-        network="results/prenetworks/{day}/network_nodal.nc"
+        network="results/prenetworks/{day}/network.nc"
     resources:
         mem_mb=4000,
     log:
@@ -34,15 +34,13 @@ rule add_electricity:
 
 rule simplify_network:
     input:
-        network="results/prenetworks/{day}/network_nodal.nc",
+        network="results/prenetworks/{day}/network.nc",
         regions_onshore="data/regions_onshore.geojson",
         regions_offshore="data/regions_offshore.geojson",
         tech_costs="data/costs_2020.csv",
     output:
-        network="results/prenetworks/{day}/network_nodal_s.nc",
-        regions_onshore="results/prenetworks/{day}/regions_onshore_s.geojson",
-        regions_offshore="results/prenetworks/{day}/regions_offshore_s.geojson",
-        busmap="results/prenetworks/{day}/busmap_s.csv",
+        network="results/prenetworks/{day}/network_s.nc",
+        # busmap="results/prenetworks/{day}/busmap_s.csv",
         # connection_costs=RESOURCES + "live_data/{date}_{period}/connection_costs_s.csv",
     resources:
         mem_mb=1500,
@@ -52,3 +50,22 @@ rule simplify_network:
         "../envs/environment.yaml"
     script:
         "../scripts/simplify_network.py"
+
+
+rule cluster_network:
+    input:
+        network="results/prenetworks/{day}/network_s.nc",
+        tech_costs="data/costs_2020.csv",
+        target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
+        regions_onshore="data/regions_onshore_s.geojson",
+        regions_offshore="data/regions_offshore_s.geojson",
+    output:
+        network="results/prenetworks/{day}/network_s_{layout}.nc",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/prenetworks/{day}_s_{layout}.log",  
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/cluster_network.py"
