@@ -26,7 +26,6 @@ from pathlib import Path
 sys.path.append(str(Path.cwd() / 'scripts'))
 from _helpers import configure_logging
 
-
 if __name__ == "__main__":
     configure_logging(snakemake)
 
