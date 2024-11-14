@@ -15,6 +15,7 @@ min_version("8.11")
 
 configfile: "config.yaml"
 
-include: "rules/retrieve.smk"
 include: "rules/prerun_rules.smk"
-include: "rules/prepare.smk"
+include: "rules/retrieve.smk"
+include: "rules/run.smk"
+include: "rules/postprocess.smk"
