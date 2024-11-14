@@ -5,7 +5,7 @@
 
 rule build_flow_constraints:
     output:
-        flow_constraints="data/flow_constraints_{year}.csv"
+        flow_constraints=protected("data/flow_constraints_{year}.csv")
     resources:
         mem_mb=4000,
     log:
@@ -20,6 +20,7 @@ rule build_base:
         flow_constraints=lambda wildcards: f"data/flow_constraints_{wildcards.day[:4]}.csv",
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
+        nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         day_ahead_prices="data/base/{day}/day_ahead_prices.csv",
         offers="data/base/{day}/offers.csv",

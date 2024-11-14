@@ -34,6 +34,7 @@ from functools import wraps
 
 from io import StringIO
 from typing import Iterable, Tuple
+from entsoe import EntsoePandasClient
 
 from _helpers import (
     to_datetime,
@@ -42,7 +43,7 @@ from _helpers import (
 from build_flow_constraints import get_boundary_flow_day
 from _elexon_helpers import robust_request
 from _constants import build_sp_register
-
+from _tokens import ENTSOE_API_KEY
 
 
 ######################    PHYSICAL NOTIFICATIONS   ########################
@@ -422,6 +423,38 @@ def build_boundary_flow_constraints(date_range):
     assert df.isna().sum().sum() == 0, "There are missing values in the flow constraint data."
 
     return df
+
+
+def build_nemo_powerflow(date_range):
+    '''Flowdata on the Nemo interconnector is not available from Elexon, and
+    is retrieved through the ENTSOE API.'''
+
+    client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+
+    nemo_BEGB = client.query_crossborder_flows(
+        'BE', 'GB',
+        start=date_range[0] - pd.Timedelta('60min'),
+        end=date_range[-1] + pd.Timedelta('60min'),
+        )
+
+    nemo_GBBE = client.query_crossborder_flows(
+        'GB', 'BE',
+        start=date_range[0] - pd.Timedelta('60min'),
+        end=date_range[-1] + pd.Timedelta('60min'),
+        )
+
+    nemo_flow = (nemo_BEGB - nemo_GBBE).resample('30min').mean()
+
+    if nemo_flow.index.tz is None:
+        nemo_flow.index = nemo_flow.index.tz_localize(date_range.tz)
+    else:
+        nemo_flow.index = nemo_flow.index.tz_convert(date_range.tz)
+
+    nemo_flow = nemo_flow.loc[date_range]
+
+    assert nemo_flow.index.equals(date_range)
+
+    return nemo_flow
 
 
 if __name__ == '__main__':
