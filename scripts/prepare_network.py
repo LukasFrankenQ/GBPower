@@ -21,7 +21,12 @@ import pandas as pd
 from _helpers import configure_logging
 
 
-def scale_merit_order(n, dah, collective=True):
+def scale_merit_order(
+        n,
+        dah,
+        collective=False,
+        smooth_dah=True,
+        ):
     """
     Scale the marginal cost of fossil and biomass generators by the wholesale price
 
@@ -31,9 +36,18 @@ def scale_merit_order(n, dah, collective=True):
         weighted average marginal_cost of the marginal unit.
 
     if collective is False, the scaling factor is calculated for each period separately.
+
+    smooth_dah applies a smoothing filter to the wholesale price time series
+    to prevent erratic behaviour in the marginal cost of the fossil and biomass generators.
     """
 
     gb_buses = n.buses.loc[n.buses.country == 'GB'].index
+
+    if smooth_dah:
+        dah = (
+            dah.rolling(8, center=True, min_periods=1)
+            .mean()
+        )
 
     # technologies that see their marginal price scaled by the wholesale price
     scalers = ['fossil', 'biomass']
@@ -47,13 +61,9 @@ def scale_merit_order(n, dah, collective=True):
         ints_marginal_cap = []
         found_countries = []
 
-        for ic, country in n.links.loc[n.links['carrier'] == 'interconnector', 'bus0'].items():
+        for ic, country in interconnection_countries.items():
             try:
-                ints_marginal_cost.append(
-                    n.generators_t.marginal_cost[country.lower() + "_local_market"]
-                    .iloc[period]
-                    )
-
+                ints_marginal_cost.append(n.generators_t.marginal_cost[country.lower() + "_local_market"].iloc[period])
                 ints_marginal_cap.append(n.links.p_nom.loc[ic])
                 found_countries.append(country)
 
@@ -83,7 +93,7 @@ def scale_merit_order(n, dah, collective=True):
 
         if isinstance(mc, pd.Series): 
             mc = mc.iloc[0]
-        
+
         marginal_unit_cost.loc[dt] = mc
 
         if not collective:
@@ -122,7 +132,6 @@ def scale_merit_order(n, dah, collective=True):
         scaling_factor = weighted_avg_dah / weighted_avg_mc
 
     n.generators.loc[scaling_units, 'marginal_cost'] *= scaling_factor
-
 
 
 def add_wind(
@@ -243,6 +252,15 @@ def add_thermal(
 
     assert plants.isin(wholesale_prices.index).all(), 'Missing wholesale prices for some thermal plants.'    
 
+    missing = plants.difference(wholesale_prices.index)
+    if len(missing) > 0:
+        logger.warning(f'Filling in wholesale prices for {", ".join(missing)}')
+
+    wholesale_prices = pd.concat((
+        wholesale_prices,
+        pd.Series(wholesale_prices.mean(), index=missing)
+    ))
+
     n.add(
         "Generator",
         plants,
@@ -263,6 +281,11 @@ def add_temporal_flexibility(
         carrier='battery',
         ):
 
+    # data shows that flexible assets are not used to their full potential
+    # due to usage in other markets or myopic foresight.
+    # To account for this, the storage capacity is reduced by a factor.
+    damping_factor = 0.25
+
     assets = bmus[bmus['carrier'] == carrier].index
 
     assets = assets.intersection(pn.columns).intersection(mel.columns)
@@ -282,7 +305,7 @@ def add_temporal_flexibility(
         assets,
         bus=bmus.loc[assets, 'bus'],
         carrier=carrier,
-        p_nom=battery_phs_capacities.loc[assets, 'power_cap[MW]'],
+        p_nom=battery_phs_capacities.loc[assets, 'power_cap[MW]'] * damping_factor,
         max_hours=max_hours.loc[assets],
         marginal_cost=0.,
         e_cyclic=True,
@@ -350,6 +373,7 @@ def add_interconnectors(
         bmus,
         pn,
         europe_wholesale_prices,
+        nemo,
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
@@ -367,7 +391,8 @@ def add_interconnectors(
         # no data for Nemo at the moment
         if ic == 'Nemo':
             link_kwargs = {
-                'bus1': '4975'
+                'bus1': '4975',
+                'p_set': nemo.iloc[:,0]
             }
 
         else:
@@ -396,6 +421,8 @@ def add_interconnectors(
             if (flow == 0).all():
                 logger.info(f'No interconnector flow data for {ic}')
                 continue
+
+        p_nom = max(p_nom, link_kwargs['p_set'].abs().max())
 
         # this setup simulates a local market for each country that
         # can either be supplied by local generators (if the local wholesale
@@ -451,6 +478,7 @@ def build_static_supply_curve(
         mel,
         wholesale_prices,
         europe_wholesale_prices,
+        nemo,
         cfd_strike_prices,
         roc_values,
         nuclear_wholesale_price,
@@ -482,6 +510,7 @@ def build_static_supply_curve(
         bmus,
         pn,
         europe_wholesale_prices,
+        nemo,
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
@@ -489,19 +518,21 @@ def build_static_supply_curve(
         )
 
 
-def add_load(n, pns, weights, interconnection_mapper):
+def add_load(n, pns, weights, interconnection_mapper, nemo):
 
     # subtract for interconnector export
     real_int_flow = pd.DataFrame(index=n.snapshots)
 
     for name, bmu_names in interconnection_mapper.items():
         if name == 'Nemo':
-            continue
+            real_int_flow[name] = nemo.iloc[:,0]
 
-        real_int_flow[name] = (
-            pn[pn.columns[pn.columns.str.contains('|'.join(bmu_names))]]
-            .sum(axis=1)
-        )
+        else:
+            real_int_flow[name] = (
+                pn[pn.columns[pn.columns.str.contains('|'.join(bmu_names))]]
+                .sum(axis=1)
+            )
+
     export = real_int_flow.clip(upper=0).sum(axis=1).mul(-1)
 
     assert (export >= 0).all(), 'Interconnector export should be negative.'
@@ -567,11 +598,17 @@ if __name__ == '__main__':
         index_col=0,
         parse_dates=True
         )
+    nemo = pd.read_csv(
+        snakemake.input['nemo_powerflow'],
+        index_col=0,
+        parse_dates=True
+    )
 
     pn.index = pn.index.values
     mel.index = mel.index.values
     europe_wholesale_prices.index = europe_wholesale_prices.index.values
     dah.index = dah.index.values
+    nemo.index = nemo.index.values
 
     thermal_generation_costs = (
         pd.read_csv(
@@ -610,7 +647,6 @@ if __name__ == '__main__':
         index_col=0
         )
 
-    n = pypsa.Network(snakemake.input['network'])
     weights = pd.read_csv(snakemake.input['load_weights'], index_col=0)
     weights.index = weights.index.astype(str)
 
@@ -625,11 +661,20 @@ if __name__ == '__main__':
     interconnection_capacities = data['interconnection_capacities']
     country_coords = data['country_coords']
 
+
+    n = pypsa.Network(snakemake.input['network'])
+
     add_carriers(n, bmus, interconnection_countries)
 
     n.set_snapshots(pn.index)
 
-    add_load(n, pn, weights, interconnection_mapper)
+    add_load(
+        n,
+        pn,
+        weights,
+        interconnection_mapper,
+        nemo
+        )
 
     build_static_supply_curve(
         n,
@@ -638,6 +683,7 @@ if __name__ == '__main__':
         mel,
         thermal_generation_costs,
         europe_wholesale_prices,
+        nemo,
         cfd_strike_prices,
         roc_values,
         nuclear_wholesale_price,
@@ -648,6 +694,6 @@ if __name__ == '__main__':
         country_coords,
         )
 
-    scale_merit_order(n, dah, collective=True)
+    scale_merit_order(n, dah, collective=False)
 
     n.export_to_netcdf(snakemake.output['network'])
