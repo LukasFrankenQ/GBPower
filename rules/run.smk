@@ -22,11 +22,11 @@ rule add_electricity:
         europe_day_ahead_prices='data/base/{day}/europe_day_ahead_prices.csv',
         nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
     output:
-        network="results/prenetworks/{day}/network.nc"
+        network="results/networks/{day}/network.nc"
     resources:
         mem_mb=4000,
     log:
-        "../logs/prenetworks/{day}.log",
+        "../logs/networks/{day}.log",
     conda:
         "../envs/environment.yaml",
     script:
@@ -35,18 +35,18 @@ rule add_electricity:
 
 rule simplify_network:
     input:
-        network="results/prenetworks/{day}/network.nc",
+        network="results/networks/{day}/network.nc",
         regions_onshore="data/regions_onshore.geojson",
         regions_offshore="data/regions_offshore.geojson",
         tech_costs="data/costs_2020.csv",
     output:
-        network="results/prenetworks/{day}/network_s.nc",
+        network="results/networks/{day}/network_s.nc",
         # busmap="results/prenetworks/{day}/busmap_s.csv",
         # connection_costs=RESOURCES + "live_data/{date}_{period}/connection_costs_s.csv",
     resources:
         mem_mb=1500,
     log:
-        "../logs/prenetworks/{day}_s.log",  
+        "../logs/networks/{day}_s.log",  
     conda:
         "../envs/environment.yaml"
     script:
@@ -55,18 +55,34 @@ rule simplify_network:
 
 rule cluster_network:
     input:
-        network="results/prenetworks/{day}/network_s.nc",
+        network="results/networks/{day}/network_s.nc",
         tech_costs="data/costs_2020.csv",
         target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
     output:
-        network="results/prenetworks/{day}/network_s_{layout}.nc",
+        network="results/networks/{day}/network_s_{layout}.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/prenetworks/{day}_s_{layout}.log",  
+        "../logs/networks/{day}_s_{layout}.log",  
     conda:
         "../envs/environment.yaml"
     script:
         "../scripts/cluster_network.py"
+
+
+rule solve_network:
+    input:
+        network="results/networks/{day}/network_s_{layout}.nc",
+        line_calibration="data/preprocessed/line_calibration.csv",
+    output:
+        network="results/networks/{day}/network_s_{layout}_solved.nc",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/networks/{day}_s_{layout}_solved.log",  
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/solve_network.py"
