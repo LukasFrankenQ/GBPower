@@ -1,10 +1,11 @@
 import logging
 from functools import reduce
 
-import numpy as np
-import pandas as pd
+import yaml
 import pypsa
 import scipy as sp
+import numpy as np
+import pandas as pd
 
 from _helpers import (
     configure_logging,
@@ -88,6 +89,7 @@ def _prepare_connection_costs_per_link(n, costs, renewable_carriers, length_fact
         for tech in renewable_carriers
         if tech.startswith("offwind")
     }
+
 
 def _compute_connection_costs_to_bus(
     n,
@@ -342,6 +344,7 @@ def remove_stubs(
     length_factor,
     simplify_network,
     output,
+    country_names,
     aggregation_strategies=dict(),
 ):
     logger.info("Removing stubs")
@@ -353,6 +356,17 @@ def remove_stubs(
     connection_costs_to_bus = _compute_connection_costs_to_bus(
         n, busmap, costs, renewable_carriers, length_factor
     )
+
+    network_countries = n.buses.index.intersection(country_names)
+    busmap.drop(busmap.index.intersection(network_countries), inplace=True)
+
+    busmap = pd.concat((
+        busmap,
+        pd.Series(
+            network_countries,
+            index=network_countries,
+        )
+    ))
 
     _aggregate_and_move_components(
         n,
@@ -448,13 +462,12 @@ def cluster(
 if __name__ == "__main__":
 
     configure_logging(snakemake)
-    # set_scenario_config(snakemake)
-
-    # params = snakemake.params
-    # solver_name = snakemake.config["solving"]["solver"]["name"]
 
     n = pypsa.Network(snakemake.input.network)
 
+    with open(snakemake.input['interconnection_helpers'], 'r') as f:
+        country_names = list(yaml.safe_load(f)['country_coords'])
+    
     solver_name = 'highs'
 
     simplify_network = {
@@ -553,6 +566,7 @@ if __name__ == "__main__":
             length_factor,
             simplify_network,
             snakemake.output,
+            country_names,
             aggregation_strategies=aggregation_strategies,
         )
         busmaps.append(stub_map)
@@ -615,5 +629,16 @@ if __name__ == "__main__":
 
     busmap_s = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
     # busmap_s.to_csv(snakemake.output.busmap)
+
+    network_countries = n.buses.index.intersection(country_names)
+    busmap_s.drop(busmap_s.index.intersection(network_countries), inplace=True)
+
+    busmap_s = pd.concat((
+        busmap_s,
+        pd.Series(
+            network_countries,
+            index=network_countries,
+        )
+    ))
 
     cluster_regions(busmaps, snakemake.input, snakemake.output)

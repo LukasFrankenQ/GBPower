@@ -399,7 +399,7 @@ def add_interconnectors(
             inter_flow = bmus.loc[
                 bmus.index.str.contains('|'.join(ic_bmunits)),
                 'bus']
-            
+
             if inter_flow.empty:
                 logger.info(f'No interconnector flow data for {ic}')
                 continue
@@ -416,7 +416,6 @@ def add_interconnectors(
                 'p_set': flow,
                 'bus1': gb_bus,
                 }
-
 
             if (flow == 0).all():
                 logger.info(f'No interconnector flow data for {ic}')
@@ -660,7 +659,6 @@ if __name__ == '__main__':
     interconnection_mapper = data['interconnection_mapper']
     interconnection_capacities = data['interconnection_capacities']
     country_coords = data['country_coords']
-
 
     n = pypsa.Network(snakemake.input['network'])
 
