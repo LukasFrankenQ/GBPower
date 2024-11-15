@@ -125,6 +125,7 @@ Exemplary unsolved network clustered to 37 nodes:
 import logging
 
 import sys
+import yaml
 import pypsa
 import linopy
 import numpy as np
@@ -463,6 +464,23 @@ if __name__ == "__main__":
     custom_busmap = make_busmap(n, target_regions)
 
     custom_busmap.dropna(inplace=True)
+
+    with open(snakemake.input['interconnection_helpers'], 'r') as f:
+        country_names = list(yaml.safe_load(f)['country_coords'])
+
+    network_countries = n.buses.index.intersection(country_names)
+    custom_busmap.drop(
+        custom_busmap.index.intersection(network_countries),
+        inplace=True
+        )
+
+    custom_busmap = pd.concat((
+        custom_busmap,
+        pd.Series(
+            network_countries,
+            index=network_countries,
+        )
+    ))
 
     n_clusters = custom_busmap.nunique()
 

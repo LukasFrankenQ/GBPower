@@ -35,11 +35,11 @@ rule add_electricity:
 
 rule simplify_network:
     input:
-        interconnection_helpers='data/interconnection_helpers.yaml',
         network="results/{day}/network.nc",
         regions_onshore="data/regions_onshore.geojson",
         regions_offshore="data/regions_offshore.geojson",
         tech_costs="data/costs_2020.csv",
+        interconnection_helpers='data/interconnection_helpers.yaml',
     output:
         network="results/{day}/network_s.nc",
         # busmap="results/prenetworks/{day}/busmap_s.csv",
@@ -61,6 +61,7 @@ rule cluster_network:
         target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
+        interconnection_helpers='data/interconnection_helpers.yaml',
     output:
         network="results/{day}/network_s_{layout}.nc",
     resources:
