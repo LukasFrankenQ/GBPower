@@ -26,6 +26,48 @@ from scipy.sparse.csgraph import connected_components, dijkstra
 logger = logging.getLogger(__name__)
 
 
+def lines_to_links(n, index=None):
+
+    if index is None:
+        index = n.lines.index
+
+    overlap = (
+        n.links.columns.intersection(n.lines.columns).tolist() +
+        n.lines.columns[n.lines.columns.str.contains('s_')].tolist()
+    )
+
+    linelinks = n.lines.loc[index, overlap].copy()
+
+    linelinks.loc[:, 'efficiency'] = 1.
+    linelinks.loc[:, 'underwater_fraction'] = 0
+
+    linelinks.columns = linelinks.columns.str.replace('s_', 'p_')    
+    diff = n.links.columns.difference(linelinks.columns)
+
+    linelinks.loc[:, diff] = n.links.iloc[0].loc[diff].values
+
+    n.add(
+        'Link', 'dummy', bus0=n.buses.index[0], bus1=n.buses.index[1],
+    )
+
+    new_links = pd.concat((
+            n.links.loc[['dummy']],
+            linelinks
+        )).iloc[1:]
+
+    n.links.drop('dummy', inplace=True)
+
+    for name, kwargs in new_links.iterrows():
+
+        kwargs = kwargs.to_dict()
+        n.add('Link', name, **kwargs)
+
+        n.remove(
+            'Line',
+            name
+        )
+
+
 def simplify_network_to_380(n):
     """
     Fix all lines to a voltage level of 380 kV and remove all transformers.
@@ -625,20 +667,15 @@ if __name__ == "__main__":
     update_p_nom_max(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
+
+    # full DC power-flow approximation, by turning power lines into links
+    lines_to_links(n)
+
     n.export_to_netcdf(snakemake.output.network)
+
+    ############## Currently does nothing ################
 
     busmap_s = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
     # busmap_s.to_csv(snakemake.output.busmap)
-
-    network_countries = n.buses.index.intersection(country_names)
-    busmap_s.drop(busmap_s.index.intersection(network_countries), inplace=True)
-
-    busmap_s = pd.concat((
-        busmap_s,
-        pd.Series(
-            network_countries,
-            index=network_countries,
-        )
-    ))
 
     cluster_regions(busmaps, snakemake.input, snakemake.output)
