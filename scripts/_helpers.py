@@ -283,3 +283,21 @@ def check_network_consistency(n):
     main_system = max(connected_components, key=len)
 
     return n.buses.loc[~n.buses.index.isin(main_system)].index.tolist()
+
+
+def set_nested_attr(obj, attr_path, value):
+    """
+    Sets a nested attribute on an object given an attribute path.
+
+    Parameters:
+    - obj: The object on which to set the attribute.
+    - attr_path: A string representing the nested attribute path, e.g., 'a.b.c'.
+    - value: The value to set for the nested attribute.
+    """
+
+    attrs = attr_path.split('.')
+
+    for attr in attrs[:-1]:
+        obj = getattr(obj, attr)
+
+    setattr(obj, attrs[-1], value)

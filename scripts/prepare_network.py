@@ -308,12 +308,13 @@ def add_temporal_flexibility(
         p_nom=battery_phs_capacities.loc[assets, 'power_cap[MW]'] * damping_factor,
         max_hours=max_hours.loc[assets],
         marginal_cost=0.,
-        e_cyclic=True,
-        state_of_charge_initial=(
-            battery_phs_capacities
-            .loc[assets, 'energy_cap[MWh]']
-            .div(3.) # start at 1/3 of capacity based on typical overnight charging
-        ),
+        cyclic_state_of_charge=True,
+        # e_cyclic=True,
+        # state_of_charge_initial=(
+        #     battery_phs_capacities
+        #     .loc[assets, 'energy_cap[MWh]']
+        #     .div(3.) # start at 1/3 of capacity based on typical overnight charging
+        # ),
     )
 
 

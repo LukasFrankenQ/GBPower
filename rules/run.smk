@@ -76,14 +76,17 @@ rule cluster_network:
 
 rule solve_network:
     input:
-        network="results/{day}/network_s_{layout}.nc",
+        network_nodal="results/{day}/network_s_nodal.nc",
+        network_national="results/{day}/network_s_national.nc",
         # line_calibration="data/preprocessed/line_calibration.csv",
     output:
-        network="results/{day}/network_s_{layout}_solved.nc",
+        network_nodal="results/{day}/network_s_nodal_solved.nc",
+        network_national="results/{day}/network_s_national_solved.nc",
+        network_national_redispatch="results/{day}/network_s_national_solved_redispatch.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_s_{layout}_solved.log",  
+        "../logs/networks/{day}_solved.log",  
     conda:
         "../envs/environment.yaml"
     script:
