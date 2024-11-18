@@ -54,8 +54,9 @@ if __name__ == '__main__':
         'FLOWSTH': [5203, 11528, 11764, 6203, 5207]
     }
 
-    for boundary in flow_constraints.columns:
+    calibration_parameter = 0.75
 
+    for boundary in flow_constraints.columns:
 
         limit = flow_constraints[boundary]
         lines = pd.Index(boundaries[boundary], dtype=str)
@@ -65,17 +66,18 @@ if __name__ == '__main__':
         except KeyError:
             nameplate_capacity = network_nodal.links.loc[lines, 'p_nom'].sum()
         
-        flow_max_pu = limit / nameplate_capacity
+        flow_max_pu = limit / nameplate_capacity * calibration_parameter
 
         logger.info(f'Tuning flow constraint for {boundary} by factor {flow_max_pu.mean():.2f}')
 
-        try:
-            network_nodal.lines_t.s_max_pu[boundary] = flow_max_pu
-            national_redispatch.lines_t.s_max_pu[boundary] = flow_max_pu
-        except KeyError:
-            print('goood second except!')
-            network_nodal.links_t.p_max_pu[boundary] = flow_max_pu
-            national_redispatch.links_t.p_max_pu[boundary] = flow_max_pu
+        if lines[0] in network_nodal.lines.index:
+            for line in lines:
+                network_nodal.lines_t.s_max_pu[line] = flow_max_pu.values
+                national_redispatch.lines_t.s_max_pu[line] = flow_max_pu.values
+        else:
+            for line in lines:
+                network_nodal.links_t.p_max_pu[line] = flow_max_pu.values
+                national_redispatch.links_t.p_max_pu[line] = flow_max_pu.values
 
     network_nodal.optimize()
     network_nodal.export_to_netcdf(snakemake.output['network_nodal'])
