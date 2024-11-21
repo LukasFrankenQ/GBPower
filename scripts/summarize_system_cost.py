@@ -149,7 +149,7 @@ def get_bidding_volume(nat, bal):
         bal.storage_units_t.p[water].sum(axis=1)
     ).clip(lower=0)
     
-    return bidding_volume
+    return bidding_volume * 0.5
 
 
 def get_balancing_cost(
@@ -169,8 +169,6 @@ def get_balancing_cost(
     offer_default_cost = 90 # £/MWh
 
     for dt, model_vol in bidding_volume.items():
-
-        model_vol *= 0.5  # MW -> MWh
 
         period_bids = actual_bids.loc[dt].T.sort_values(by='price').dropna()
         period_bids['cumvol'] = period_bids['vol'].cumsum()
