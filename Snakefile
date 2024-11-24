@@ -14,8 +14,9 @@ from scripts._helpers import path_provider
 min_version("8.11")
 
 wildcard_constraints:
-    day = r"\d{4}-\d{2}-\d{2}",
-    layout = r"national|fti|eso|nodal"
+    day=r"\d{4}-\d{2}-\d{2}",
+    layout=r"national|fti|eso|nodal",
+    ic=r"static|flex"
 
 configfile: "config.yaml"
 

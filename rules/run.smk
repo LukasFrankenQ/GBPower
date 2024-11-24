@@ -22,11 +22,11 @@ rule add_electricity:
         europe_day_ahead_prices='data/base/{day}/europe_day_ahead_prices.csv',
         nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
     output:
-        network="results/{day}/network.nc"
+        network="results/{day}/network_{ic}.nc"
     resources:
         mem_mb=4000,
     log:
-        "../logs/networks/{day}.log",
+        "../logs/networks/{day}_{ic}.log",
     conda:
         "../envs/environment.yaml",
     script:
@@ -35,19 +35,19 @@ rule add_electricity:
 
 rule simplify_network:
     input:
-        network="results/{day}/network.nc",
+        network="results/{day}/network_{ic}.nc",
         regions_onshore="data/regions_onshore.geojson",
         regions_offshore="data/regions_offshore.geojson",
         tech_costs="data/costs_2020.csv",
         interconnection_helpers='data/interconnection_helpers.yaml',
     output:
-        network="results/{day}/network_s.nc",
+        network="results/{day}/network_{ic}_s.nc",
         # busmap="results/prenetworks/{day}/busmap_s.csv",
         # connection_costs=RESOURCES + "live_data/{date}_{period}/connection_costs_s.csv",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_s.log",  
+        "../logs/networks/{day}_{ic}_s.log",  
     conda:
         "../envs/environment.yaml"
     script:
@@ -56,18 +56,18 @@ rule simplify_network:
 
 rule cluster_network:
     input:
-        network="results/{day}/network_s.nc",
+        network="results/{day}/network_{ic}_s.nc",
         tech_costs="data/costs_2020.csv",
         target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
         interconnection_helpers='data/interconnection_helpers.yaml',
     output:
-        network="results/{day}/network_s_{layout}.nc",
+        network="results/{day}/network_{ic}_s_{layout}.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_s_{layout}.log",  
+        "../logs/networks/{day}_{ic}_s_{layout}.log",  
     conda:
         "../envs/environment.yaml"
     script:
@@ -76,18 +76,18 @@ rule cluster_network:
 
 rule solve_network:
     input:
-        network_nodal="results/{day}/network_s_nodal.nc",
-        network_national="results/{day}/network_s_national.nc",
+        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
+        network_national="results/{day}/network_{ic}_s_national.nc",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         # line_calibration="data/preprocessed/line_calibration.csv",
     output:
-        network_nodal="results/{day}/network_s_nodal_solved.nc",
-        network_national="results/{day}/network_s_national_solved.nc",
-        network_national_redispatch="results/{day}/network_s_national_solved_redispatch.nc",
+        network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
+        network_national="results/{day}/network_{ic}_s_national_solved.nc",
+        network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_solved.log",  
+        "../logs/networks/{day}_{ic}_solved.log",  
     conda:
         "../envs/environment.yaml"
     script:

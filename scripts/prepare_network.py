@@ -378,6 +378,7 @@ def add_interconnectors(
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
+        ic_operation,
         country_coords,
     ):
 
@@ -391,10 +392,22 @@ def add_interconnectors(
 
         # no data for Nemo at the moment
         if ic == 'Nemo':
+
             link_kwargs = {
                 'bus1': '4975',
-                'p_set': nemo.iloc[:,0]
             }
+
+            if ic_operation == 'fixed':
+                link_kwargs.update({
+                    'p_set': nemo.iloc[:,0]
+                })
+            else:
+                rr = nemo.iloc[:,0].diff().dropna().abs().max()
+                link_kwargs.update({
+                    'ramp_rate_up': rr,
+                    'ramp_rate_down': rr,
+                })
+            p_nom = max(p_nom, nemo.iloc[:,0].abs().max())
 
         else:
             inter_flow = bmus.loc[
@@ -412,17 +425,25 @@ def add_interconnectors(
                 .sum(axis=1)
             )
 
-            p_nom = max(p_nom, flow.max())
+            p_nom = max(p_nom, flow.abs().max())
             link_kwargs = {
-                'p_set': flow,
                 'bus1': gb_bus,
                 }
+
+            if ic_operation == 'fixed':
+                link_kwargs.update({
+                    'p_set': flow
+                })
+            else:
+                rr = flow.diff().dropna().abs().max()
+                link_kwargs.update({
+                    'ramp_rate_up': rr,
+                    'ramp_rate_down': rr,
+                })
 
             if (flow == 0).all():
                 logger.info(f'No interconnector flow data for {ic}')
                 continue
-
-        p_nom = max(p_nom, link_kwargs['p_set'].abs().max())
 
         # this setup simulates a local market for each country that
         # can either be supplied by local generators (if the local wholesale
@@ -486,6 +507,7 @@ def build_static_supply_curve(
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
+        ic_operation,
         country_coords,
     ):
     """
@@ -514,6 +536,7 @@ def build_static_supply_curve(
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
+        ic_operation,
         country_coords,
         )
 
@@ -577,6 +600,7 @@ if __name__ == '__main__':
     configure_logging(snakemake)    
 
     day = snakemake.wildcards['day']
+    ic_operation = snakemake.wildcards['ic'] # if 'fixed' set to actual trading, if 'flex' optimized by model
 
     pn = pd.read_csv(
         snakemake.input['physical_notifications'],
@@ -690,6 +714,7 @@ if __name__ == '__main__':
         interconnection_mapper,
         interconnection_capacities,
         interconnection_countries,
+        ic_operation,
         country_coords,
         )
 
