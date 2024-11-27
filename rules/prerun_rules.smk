@@ -260,3 +260,16 @@ rule build_cfds:
         "../envs/environment.yaml",
     script:
         "../scripts/build_cfds.py"
+
+
+rule build_zonal_layout:
+    input:
+        eso_zones="data/raw/eso_zones.geojson",
+    output:
+        zonal_layout=protected("data/preprocessed/zonal_layout.geojson"),
+    log:
+        "../logs/zonal_layout.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../non_workflow_scripts/build_zonal_layout.py"
