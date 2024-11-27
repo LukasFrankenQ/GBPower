@@ -252,7 +252,7 @@ rule build_zonal_layout:
     input:
         eso_zones="data/raw/eso_zones.geojson",
     output:
-        zonal_layout=protected("data/preprocessed/zonal_layout.geojson"),
+        # zonal_layout="data/preprocessed/zonal_layout.geojson",
     log:
         "../logs/zonal_layout.log",
     conda:

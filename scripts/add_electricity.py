@@ -397,7 +397,7 @@ def add_interconnectors(
                 'bus1': '4975',
             }
 
-            if ic_operation == 'fixed':
+            if ic_operation == 'static':
                 link_kwargs.update({
                     'p_set': nemo.iloc[:,0]
                 })
@@ -600,7 +600,7 @@ if __name__ == '__main__':
     configure_logging(snakemake)    
 
     day = snakemake.wildcards['day']
-    ic_operation = snakemake.wildcards['ic'] # if 'fixed' set to actual trading, if 'flex' optimized by model
+    ic_operation = snakemake.wildcards['ic'] # if 'static' set to actual trading, if 'flex' optimized by model
 
     pn = pd.read_csv(
         snakemake.input['physical_notifications'],

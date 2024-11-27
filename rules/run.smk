@@ -30,7 +30,7 @@ rule add_electricity:
     conda:
         "../envs/environment.yaml",
     script:
-        "../scripts/prepare_network.py"
+        "../scripts/add_electricity.py"
 
 
 rule simplify_network:
@@ -59,6 +59,7 @@ rule cluster_network:
         network="results/{day}/network_{ic}_s.nc",
         tech_costs="data/costs_2020.csv",
         target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
+        zonal_layout="data/preprocessed/zonal_layout.geojson",
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
         interconnection_helpers='data/interconnection_helpers.yaml',

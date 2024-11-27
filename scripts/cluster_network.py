@@ -453,6 +453,25 @@ if __name__ == "__main__":
         n.export_to_netcdf(snakemake.output["network"])
         sys.exit()
 
+    elif snakemake.wildcards.layout == "zonal":
+        zonal_layout = gpd.read_file(snakemake.input.zonal_layout)
+
+        buses = gpd.GeoDataFrame(
+            n.buses,
+            geometry=gpd.points_from_xy(n.buses.x, n.buses.y),
+            crs=zonal_layout.crs
+            ).sjoin(zonal_layout)
+
+        for link, row in n.links.iterrows():
+            if row.carrier != 'AC':
+                continue    
+
+            if buses.loc[row.bus0, 'name'] == buses.loc[row.bus1, 'name']:
+                n.links.loc[link, 'p_nom'] = np.inf
+        
+        n.export_to_netcdf(snakemake.output["network"])
+        sys.exit()
+
     # remove integer outputs for compatibility with PyPSA v0.26.0
     n.generators.drop("n_mod", axis=1, inplace=True, errors="ignore")
 
