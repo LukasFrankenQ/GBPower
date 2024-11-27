@@ -429,7 +429,7 @@ def build_nemo_powerflow(date_range):
     '''Flowdata on the Nemo interconnector is not available from Elexon, and
     is retrieved through the ENTSOE API.'''
 
-    client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+    client = EntsoePandasClient(api_key=ENTSOE_API_KEY, retry_delay=60)
 
     nemo_BEGB = client.query_crossborder_flows(
         'BE', 'GB',

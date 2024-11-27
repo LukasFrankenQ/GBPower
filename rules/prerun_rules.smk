@@ -40,8 +40,7 @@ rule build_roc_values:
         bmu_locations="data/bmus_prepared.csv",
         cfd_strike_prices="resources/cfd_strike_prices.csv",
     output:
-        # protected("data/preprocessed/roc_values.csv")
-        "data/preprocessed/roc_values.csv"
+        # "data/preprocessed/roc_values.csv"
     resources:
         mem_mb=4000,
     log:
@@ -76,7 +75,7 @@ rule build_nuclear_bidding_cost:
         ),
     output:
         # protected("data/preprocessed/nuclear_marginal_cost.csv")
-        "data/preprocessed/nuclear_marginal_cost.csv"
+        # "data/preprocessed/nuclear_marginal_cost.csv"
     resources:
         mem_mb=4000,
     log:
@@ -110,8 +109,7 @@ rule build_battery_phs_capacities:
         ),
         bmu_locations="data/bmus_prepared.csv",
     output:
-        # protected("data/preprocessed/battery_phs_capacities.csv")
-        "data/preprocessed/battery_phs_capacities.csv"
+        # "data/preprocessed/battery_phs_capacities.csv"
     resources:
         mem_mb=4000,
     log:
@@ -120,18 +118,6 @@ rule build_battery_phs_capacities:
         "../envs/environment.yaml",
     script:
         "../non_workflow_scripts/build_battery_phs_capacities.py"
-
-
-rule process_day:
-    input:
-        lambda wildcards: 'input/week{week}.txt'.format(
-            week=datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]
-        )
-    output:
-        'data/test/{day}.txt'
-    shell:
-        'your_command_here --input {input} --output {output}'
-
 
 
 def get_input_files(wildcards):

@@ -6,9 +6,9 @@ rule add_electricity:
     input:
         network='data/raw/lmp_base.nc',
         roc_values='data/preprocessed/roc_values.csv',
-        bmus='data/preprocessed/prepared_bmus.csv',
-        load_weights='data/preprocessed/load_weights.csv',
-        cfd_strike_prices='data/preprocessed/cfd_strike_prices.csv',
+        bmus=ancient('data/preprocessed/prepared_bmus.csv'),
+        load_weights=ancient('data/preprocessed/load_weights.csv'),
+        cfd_strike_prices=ancient('data/preprocessed/cfd_strike_prices.csv'),
         nuclear_marginal_price='data/preprocessed/nuclear_marginal_cost.csv',
         battery_phs_capacities='data/preprocessed/battery_phs_capacities.csv',
         interconnection_helpers='data/interconnection_helpers.yaml',
