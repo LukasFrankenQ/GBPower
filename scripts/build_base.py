@@ -104,6 +104,10 @@ def build_maximum_export_limits_period(date, period):
 
     df = pd.read_csv(StringIO(response.text))
 
+    if df.empty:
+        logger.warning(f"No data for {date} period {period}.")
+        return pd.Series(name=start)
+
     df['TimeFrom'] = pd.to_datetime(df['TimeFrom'])
     df['TimeTo'] = pd.to_datetime(df['TimeTo'])
 

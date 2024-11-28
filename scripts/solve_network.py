@@ -41,6 +41,43 @@ def insert_flow_constraints(
                 n.links_t.p_max_pu[line] = flow_max_pu.values
 
 
+def insert_battery_commitments(n_from, n_to):
+    '''
+    Takes wholesale commitments of batteries and PHS from n_from and inserts them 
+    into n_to, i.e. n_to HAS TO operate the respective storage units in the same
+    way as n_from.
+    '''
+
+    for su in n_from.storage_units_t['p'].columns:
+
+        if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
+            continue
+
+        p_set = n_from.storage_units_t['p'][su]
+
+        bus = n_to.storage_units.loc[su, 'bus']
+        n_to.remove('StorageUnit', su)
+
+        new_load = n_to.loads_t['p_set'][bus] - p_set
+
+        set_nested_attr(
+            n_to,
+            f'loads_t.p_set.{bus}',
+            new_load
+        )
+
+
+def insert_interconnector_commitments(n_from, n_to):
+    '''
+    Takes wholesale commitments of interconnectors from n_from and inserts them 
+    into n_to, i.e. n_to HAS TO operate the respective storage units in the same
+    way as n_from.
+    '''
+    
+    ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
+    n_to.links_t.p_set.loc[:, ic] = n_to.links_t.p0.loc[:, ic]
+
+
 if __name__ == '__main__':
 
     configure_logging(snakemake)
@@ -107,38 +144,12 @@ if __name__ == '__main__':
     # -sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
-    def insert_battery_positions(n_from, n_to):
-
-        for su in n_from.storage_units_t['p'].columns:
-
-            if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
-                continue
-
-            p_set = n_from.storage_units_t['p'][su]
-
-            bus = n_to.storage_units.loc[su, 'bus']
-            n_to.remove('StorageUnit', su)
-
-            new_load = n_to.loads_t['p_set'][bus] - p_set
-
-            set_nested_attr(
-                n_to,
-                f'loads_t.p_set.{bus}',
-                new_load
-            )
-    
-    def insert_interconnector_positions(n_from, n_to):
-        
-        ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
-        n_to.links_t.p_set.loc[:, ic] = n_to.links_t.p0.loc[:, ic]
-
-
-    insert_battery_positions(n_national, n_national_redispatch)
-    insert_battery_positions(n_zonal, n_zonal_redispatch)
+    insert_battery_commitments(n_national, n_national_redispatch)
+    insert_battery_commitments(n_zonal, n_zonal_redispatch)
 
     if snakemake.wildcards.ic == 'flex':
-        insert_interconnector_positions(n_national, n_national_redispatch)
-        insert_interconnector_positions(n_zonal, n_zonal_redispatch)
+        insert_interconnector_commitments(n_national, n_national_redispatch)
+        insert_interconnector_commitments(n_zonal, n_zonal_redispatch)
 
     n_national_redispatch.optimize()
     n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
