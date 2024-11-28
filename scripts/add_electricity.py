@@ -430,7 +430,7 @@ def add_interconnectors(
                 'bus1': gb_bus,
                 }
 
-            if ic_operation == 'fixed':
+            if ic_operation == 'static':
                 link_kwargs.update({
                     'p_set': flow
                 })
