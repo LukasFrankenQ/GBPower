@@ -16,7 +16,7 @@ def insert_flow_constraints(
     n,
     flow_constraints,
     boundaries,
-    calibration_parameter,
+    calibration_parameters,
     ):
 
     for boundary in flow_constraints.columns:
@@ -29,16 +29,18 @@ def insert_flow_constraints(
         except KeyError:
             nameplate_capacity = n.links.loc[lines, 'p_nom'].sum()
         
-        flow_max_pu = limit / nameplate_capacity * calibration_parameter
+        flow_max_pu = limit / nameplate_capacity * calibration_parameters[boundary]
 
         logger.info(f'Tuning flow constraint for {boundary} by factor {flow_max_pu.mean():.2f}')
 
         if lines[0] in n.lines.index:
             for line in lines:
                 n.lines_t.s_max_pu[line] = flow_max_pu.values
+                n.lines_t.s_min_pu[line] = - flow_max_pu.values
         else:
             for line in lines:
                 n.links_t.p_max_pu[line] = flow_max_pu.values
+                n.links_t.p_min_pu[line] = - flow_max_pu.values
 
 
 def insert_battery_commitments(n_from, n_to):
@@ -82,20 +84,7 @@ if __name__ == '__main__':
 
     configure_logging(snakemake)
 
-    # calibration_parameters = pd.read_csv(
-    #     snakemake.input['line_calibration'],
-    #     index_col=0,
-    #     ).iloc[:,0]
-    
     logger.warning('Currently calibration unaware if tuning lines or links.')
-
-    # network.lines.loc[
-    #     network.lines.index.intersection(calibration_parameters.index), 's_nom'
-        # ] *= calibration_parameters
-
-    # network.links.loc[
-        # network.links.index.intersection(calibration_parameters.index), 'p_nom'
-    #     ] *= calibration_parameters
 
     # national market does not need transmission calibration
     n_national = pypsa.Network(snakemake.input['network_national'])
@@ -109,23 +98,42 @@ if __name__ == '__main__':
 
     n_nodal = pypsa.Network(snakemake.input['network_nodal'])
 
+    assert n_nodal.links.empty, 'Current setup is for full DC approximation.'
+
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
         index_col=0,
         parse_dates=True
     )
 
+    # boundaries = {
+    #     'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
+    #     'SCOTEX': [14109, 6139, 11758],
+    #     'SSHARN': [11778, 11780, 5225],
+    #     'SEIMP': [6121, 12746, 11742],
+    #     'FLOWSTH': [5203, 11528, 11764, 6203, 5207]
+    # }
+
     boundaries = {
-        'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
-        'SCOTEX': [14109, 6139, 11758],
-        'SSHARN': [11778, 11780, 5225],
+        # 'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
+        'SSE-SP': [13161, 6241, 6146, 6238],
+        # 'SCOTEX': [14109, 6139, 11758],
+        # 'SSHARN': [11778, 11780, 5225],
+        'SCOTEX': [14109, 6139, 11758, 8009],
+        'SSHARN': [11778, 11780, 5225, 8009],
         'SEIMP': [6121, 12746, 11742],
         'FLOWSTH': [5203, 11528, 11764, 6203, 5207]
     }
 
-    calibration_parameter = 0.75
+    calibration_parameters = {
+        'SSE-SP': 1.,
+        'SCOTEX': 0.6,
+        'SSHARN': 0.6,
+        'FLOWSTH': 0.3,
+        'SEIMP': 1.,
+    }
 
-    args = (flow_constraints, boundaries, calibration_parameter)
+    args = (flow_constraints, boundaries, calibration_parameters)
 
     insert_flow_constraints(n_nodal, *args)
     insert_flow_constraints(n_national_redispatch, *args)
