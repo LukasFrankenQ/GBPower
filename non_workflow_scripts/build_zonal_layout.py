@@ -90,4 +90,3 @@ if __name__ == '__main__':
 
     new_zones.index.name = 'name'
     new_zones.to_file(snakemake.output['zonal_layout'])
-

@@ -88,6 +88,7 @@ if __name__ == '__main__':
 
     # national market does not need transmission calibration
     n_national = pypsa.Network(snakemake.input['network_national'])
+
     n_national.optimize()
     n_national.export_to_netcdf(snakemake.output['network_national'])
 
