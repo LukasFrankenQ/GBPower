@@ -12,7 +12,7 @@ rule add_electricity:
         nuclear_marginal_price='data/preprocessed/nuclear_marginal_cost.csv',
         battery_phs_capacities='data/preprocessed/battery_phs_capacities.csv',
         interconnection_helpers='data/interconnection_helpers.yaml',
-        thermal_generation_costs=lambda wildcards: 'resources/thermal_costs/{year}-week{week}.csv'.format(
+        thermal_generation_costs=lambda wildcards: 'data/preprocessed/thermal_costs/{year}-week{week}.csv'.format(
             year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),

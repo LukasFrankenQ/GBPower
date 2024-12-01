@@ -74,7 +74,6 @@ rule build_nuclear_bidding_cost:
             __import__('glob')
         ),
     output:
-        # protected("data/preprocessed/nuclear_marginal_cost.csv")
         # "data/preprocessed/nuclear_marginal_cost.csv"
     resources:
         mem_mb=4000,
@@ -148,8 +147,7 @@ rule build_thermal_generator_prices:
         get_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        # protected('resources/thermal_costs/{year}-week{week}.csv')
-        'resources/thermal_costs/{year}-week{week}.csv'
+        # 'data/preprocessed/thermal_costs/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:

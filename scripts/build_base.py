@@ -411,8 +411,12 @@ def build_boundary_flow_constraints(date_range):
     except KeyError:
         df = get_boundary_flow_day(date_range)
 
-    # method does not work if at any timesteps data is missing for all boundaries
-    assert not df.isna().all(axis=1).any()
+    try:
+        # method does not work if at any timesteps data is missing for all boundaries
+        assert not df.isna().all(axis=1).any()
+    except AssertionError:
+        logger.warning("Missing constraint data. Filling with mean values of remaining year.")
+        df = df.fillna(year_data.mean())
 
     # based on mean value of each boundary, fill missing 
     # values according to variation over the day
