@@ -77,7 +77,7 @@ def insert_interconnector_commitments(n_from, n_to):
     '''
     
     ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
-    n_to.links_t.p_set.loc[:, ic] = n_to.links_t.p0.loc[:, ic]
+    n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
 
 
 if __name__ == '__main__':
