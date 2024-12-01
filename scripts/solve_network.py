@@ -98,7 +98,7 @@ if __name__ == '__main__':
 
     n_nodal = pypsa.Network(snakemake.input['network_nodal'])
 
-    assert n_nodal.links.empty, 'Current setup is for full DC approximation.'
+    assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
 
     n_zonal.optimize()
-    n_zonal.export_to_netcdf(snakemake.output['network_nodal'])
+    n_zonal.export_to_netcdf(snakemake.output['network_zonal'])
 
     # redispatch calculation (only used to estimate balancing volume)
     # computes the nodal flow after wholesale commitments have been made

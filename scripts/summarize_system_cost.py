@@ -162,54 +162,61 @@ def get_balancing_cost(
     bidding_volume = get_bidding_volume(wholesale, balanced)
     bidding_volume.index = pd.to_datetime(bidding_volume.index, utc=True)
 
-    bid_costs = pd.Series(0, index=bidding_volume.index)
-    offer_costs = pd.Series(0, index=bidding_volume.index)
+    balancing_cost_shape = bidding_volume.copy().div(bidding_volume.sum())
 
     bid_default_cost = 50 # £/MWh
     offer_default_cost = 90 # £/MWh
 
-    for dt, model_vol in bidding_volume.items():
+    process_data = lambda df: (
+        df
+        .stack()
+        .unstack(1)
+        .dropna()
+        .reset_index(drop=True)
+        .sort_values('price')
+    )
 
-        period_bids = actual_bids.loc[dt].T.sort_values(by='price').dropna()
-        period_bids['cumvol'] = period_bids['vol'].cumsum()
+    try:
+        actual_bids = process_data(actual_bids)
+    except KeyError:
+        actual_bids = pd.DataFrame(0, index=['dummy_bmu'], columns=['vol', 'price'])
 
-        period_offers = actual_offers.loc[dt].T.sort_values(by='price').dropna()
-        period_offers['cumvol'] = period_offers['vol'].cumsum()
+    try:
+        actual_offers = process_data(actual_offers)
+    except KeyError:
+        actual_offers = pd.DataFrame(0, index=['dummy_bmu'], columns=['vol', 'price'])
 
-        if period_bids.empty:
-            bid_costs.loc[dt] += bid_default_cost * model_vol
+    actual_bids['cumvol'] = actual_bids['vol'].cumsum()
+    actual_offers['cumvol'] = actual_offers['vol'].cumsum()
 
-        elif model_vol > period_bids['vol'].sum():
-            bid_costs.loc[dt] += period_bids['price'].dot(period_bids['vol'])
-            bid_costs.loc[dt] += period_bids['price'].iloc[-1] * (model_vol - period_bids['vol'].sum())
+    model_vol = bidding_volume.sum()
+    
+    costs = {
+        'bid': 0,
+        'offer': 0
+    }
+
+    for mode in ['bid', 'offer']:
+        
+        actual = actual_bids if mode == 'bid' else actual_offers
+        default_cost = bid_default_cost if mode == 'bid' else offer_default_cost
+
+        if actual['vol'].sum() == 0:
+            costs[mode] += default_cost * model_vol
+            break
+
+        elif model_vol > actual['vol'].sum():
+            costs[mode] += actual['price'].dot(actual['vol'])
+            costs[mode] += actual['price'].iloc[-1] * (model_vol - actual['vol'].sum())
 
         else:
-            ss = period_bids.loc[period_bids['cumvol'] < model_vol]
-            rest = period_bids.loc[period_bids['cumvol'] >= model_vol]
+            ss = actual.loc[actual['cumvol'] < model_vol]
+            remainder = actual.loc[actual['cumvol'] >= model_vol]
 
-            bid_costs.loc[dt] += ss['price'].dot(ss['vol'])
-            bid_costs.loc[dt] += (model_vol - ss['vol'].sum()) * rest['price'].iloc[0]
-        
-        if period_offers.empty:
-            offer_costs.loc[dt] += offer_default_cost * model_vol
+            costs[mode] += ss['price'].dot(ss['vol'])
+            costs[mode] += (model_vol - ss['vol'].sum()) * remainder['price'].iloc[0]
 
-        elif model_vol > period_offers['vol'].sum():
-            offer_costs.loc[dt] += (
-                period_offers['price'].dot(period_offers['vol'])
-            )
-            offer_costs.loc[dt] += (
-                period_offers['price'].iloc[-1] * (model_vol - period_offers['vol'].sum())
-            )
-        
-        else:
-            ss = period_offers.loc[period_offers['cumvol'] < model_vol]
-            rest = period_offers.loc[period_offers['cumvol'] >= model_vol]
-
-            offer_costs.loc[dt] += ss['price'].dot(ss['vol'])
-            offer_costs.loc[dt] += (model_vol - ss['vol'].sum()) * rest['price'].iloc[0]
-
-    return bid_costs, offer_costs
-
+    return balancing_cost_shape * costs['bid'], balancing_cost_shape * costs['offer']
 
 
 if __name__ == '__main__':
@@ -217,11 +224,12 @@ if __name__ == '__main__':
     configure_logging(snakemake)
 
     nod = pypsa.Network(snakemake.input.network_nodal) # nodal wholesale market
-    nat = pypsa.Network(snakemake.input.network_national) # national wholesale market
 
-    nat_bal = pypsa.Network(
-        snakemake.input.network_national_redispatch
-        ) # national system after redispatch
+    nat = pypsa.Network(snakemake.input.network_national) # national wholesale market
+    nat_bal = pypsa.Network(snakemake.input.network_national_redispatch) # national system after redispatch
+
+    zon = pypsa.Network(snakemake.input.network_zonal) # zonal wholesale market
+    zon_bal = pypsa.Network(snakemake.input.network_zonal_redispatch) # zonal system after redispatch
     
     logger.info('Computing Balancing Costs')
 
@@ -253,6 +261,19 @@ if __name__ == '__main__':
         index=nat.snapshots
     ).mul(1e-6)
 
+    bidcosts, offercosts = get_balancing_cost(zon, zon_bal, bids, offers)
+    total_zonal_costs = pd.DataFrame(
+        {
+            'wholesale': get_wholesale_cost(zon).values,
+            'congestion_rent': get_congestion_rents(zon).values * congestion_rent_compensation_share,
+            'cfd_payments': get_cfd_payments(zon, cfd_strike_prices).values,
+            'roc_payments': get_roc_cost(zon_bal, roc_values).values,
+            'offer_cost': offercosts.values,
+            'bid_cost': bidcosts.values,
+        },
+        index=nat.snapshots
+    ).mul(1e-6)
+
     total_nodal_costs = pd.DataFrame(
         {
             'wholesale': get_wholesale_cost(nod).values,
@@ -267,5 +288,6 @@ if __name__ == '__main__':
 
     pd.concat((
         total_nodal_costs.stack().rename('nodal'),
+        total_zonal_costs.stack().rename('zonal'),
         total_national_costs.stack().rename('national')
     ), axis=1).to_csv(snakemake.output.system_cost_summary)

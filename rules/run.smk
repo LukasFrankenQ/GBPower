@@ -81,7 +81,6 @@ rule solve_network:
         network_national="results/{day}/network_{ic}_s_national.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
-        # line_calibration="data/preprocessed/line_calibration.csv",
     output:
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
         network_national="results/{day}/network_{ic}_s_national_solved.nc",

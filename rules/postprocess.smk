@@ -11,6 +11,8 @@ rule summarize_system_cost:
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
         network_national="results/{day}/network_{ic}_s_national_solved.nc",
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
+        network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
     output:
         system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
     resources:
