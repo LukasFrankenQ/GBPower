@@ -497,18 +497,20 @@ def ensure_thermal_supply(n):
     If not, scales up capacitiy of thermal generators building on the
     assumption that the BMU dataset is missing some generators"""
 
+    gb_gen = n.generators.index[n.generators.carrier != 'local_market']
+
     available_generation = (
         pd.DataFrame(
             np.outer(
                 np.ones(len(n.snapshots)),
-                n.generators.p_nom,
+                n.generators.p_nom.loc[gb_gen].values,
             ),
             index=n.snapshots,
-            columns=n.generators.index,
+            columns=gb_gen,
         )
     )
 
-    for col in n.generators_t.p_max_pu.columns:
+    for col in n.generators_t.p_max_pu.columns.intersection(available_generation.columns):
         available_generation[col] *= n.generators_t.p_max_pu[col]
 
     gb_load = (
