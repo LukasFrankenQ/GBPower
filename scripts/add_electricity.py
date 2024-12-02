@@ -492,6 +492,53 @@ def add_interconnectors(
         )
 
 
+def ensure_thermal_supply(n):
+    """Checks if demand can be met by the available thermal supply.
+    If not, scales up capacitiy of thermal generators building on the
+    assumption that the BMU dataset is missing some generators"""
+
+    available_generation = (
+        pd.DataFrame(
+            np.outer(
+                np.ones(len(n.snapshots)),
+                n.generators.p_nom,
+            ),
+            index=n.snapshots,
+            columns=n.generators.index,
+        )
+    )
+
+    for col in n.generators_t.p_max_pu.columns:
+        available_generation[col] *= n.generators_t.p_max_pu[col]
+
+    gb_load = (
+        n.loads_t
+        .p_set
+        [n.loads.index[n.loads.carrier == 'electricity']]
+        .sum(axis=1)
+    )
+
+    diff = available_generation.sum(axis=1) - gb_load
+
+    if (diff > 0).all():
+        return
+
+    missing_capacity = - diff.min()
+
+    available_thermal = n.generators.loc[
+        n.generators.carrier.isin(['biomass', 'fossil']),
+        'p_nom',
+    ].sum()
+
+    scaling_factor = 1 + (missing_capacity + 1000) / available_thermal  # 1000 MW buffer
+
+    n.generators.loc[
+        n.generators.carrier.isin(['biomass', 'fossil']),
+        'p_nom',
+    ] *= scaling_factor
+
+
+
 def build_static_supply_curve(
         n,
         bmus,
@@ -717,6 +764,8 @@ if __name__ == '__main__':
         ic_operation,
         country_coords,
         )
+
+    ensure_thermal_supply(n)
 
     scale_merit_order(n, dah, collective=False)
 
