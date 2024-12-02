@@ -257,6 +257,7 @@ if __name__ == '__main__':
             'roc_payments': get_roc_cost(nat_bal, roc_values).values,
             'offer_cost': offercosts.values,
             'bid_cost': bidcosts.values,
+            'balancing_volume': get_bidding_volume(nat, nat_bal).values
         },
         index=nat.snapshots
     ).mul(1e-6)
@@ -270,6 +271,7 @@ if __name__ == '__main__':
             'roc_payments': get_roc_cost(zon_bal, roc_values).values,
             'offer_cost': offercosts.values,
             'bid_cost': bidcosts.values,
+            'balancing_volume': get_bidding_volume(zon, zon_bal).values
         },
         index=nat.snapshots
     ).mul(1e-6)
@@ -282,6 +284,7 @@ if __name__ == '__main__':
             'roc_payments': get_roc_cost(nod, roc_values).values,
             'offer_cost': 0,
             'bid_cost': 0,
+            'balancing_volume': 0,
         },
         index=nat.snapshots
     ).mul(1e-6)
