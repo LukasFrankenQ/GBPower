@@ -80,6 +80,11 @@ def insert_interconnector_commitments(n_from, n_to):
     n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
 
 
+def rstu(n):
+    for i in n.storage_units.index:
+        n.remove('StorageUnit', i)
+
+
 if __name__ == '__main__':
 
     configure_logging(snakemake)
@@ -88,16 +93,23 @@ if __name__ == '__main__':
 
     # national market does not need transmission calibration
     n_national = pypsa.Network(snakemake.input['network_national'])
+    print('warning: dropping storage units!')
+    rstu(n_national)
 
     n_national.optimize()
     n_national.export_to_netcdf(snakemake.output['network_national'])
 
     n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+    rstu(n_national_redispatch)
+    n_national_redispatch.storage_units.drop(n_national_redispatch.storage_units.index, inplace=True)
 
     n_zonal = pypsa.Network(snakemake.input['network_zonal'])
+    rstu(n_zonal)
     n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+    rstu(n_zonal_redispatch)
 
     n_nodal = pypsa.Network(snakemake.input['network_nodal'])
+    rstu(n_nodal)
 
     assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
@@ -127,10 +139,10 @@ if __name__ == '__main__':
     }
 
     calibration_parameters = {
-        'SSE-SP': 1.,
+        'SSE-SP': 0.8,
         'SCOTEX': 0.6,
         'SSHARN': 0.6,
-        'FLOWSTH': 0.3,
+        'FLOWSTH': 1.,
         'SEIMP': 1.,
     }
 
@@ -153,8 +165,8 @@ if __name__ == '__main__':
     # -sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
-    insert_battery_commitments(n_national, n_national_redispatch)
-    insert_battery_commitments(n_zonal, n_zonal_redispatch)
+    # insert_battery_commitments(n_national, n_national_redispatch)
+    # insert_battery_commitments(n_zonal, n_zonal_redispatch)
 
     if snakemake.wildcards.ic == 'flex':
         insert_interconnector_commitments(n_national, n_national_redispatch)
