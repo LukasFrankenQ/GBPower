@@ -21,9 +21,9 @@ rule build_base:
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
         physical_notifications="data/base/{day}/physical_notifications.csv",
+        maximum_export_limits="data/base/{day}/maximum_export_limits.csv",
         offers="data/base/{day}/offers.csv",
         bids="data/base/{day}/bids.csv",
-        maximum_export_limits="data/base/{day}/maximum_export_limits.csv",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
         day_ahead_prices="data/base/{day}/day_ahead_prices.csv",

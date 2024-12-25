@@ -93,23 +93,22 @@ if __name__ == '__main__':
 
     # national market does not need transmission calibration
     n_national = pypsa.Network(snakemake.input['network_national'])
-    print('warning: dropping storage units!')
-    rstu(n_national)
+    # print('warning: dropping storage units!')
+    # rstu(n_national)
 
     n_national.optimize()
     n_national.export_to_netcdf(snakemake.output['network_national'])
 
     n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
-    rstu(n_national_redispatch)
-    n_national_redispatch.storage_units.drop(n_national_redispatch.storage_units.index, inplace=True)
+    # rstu(n_national_redispatch)
 
     n_zonal = pypsa.Network(snakemake.input['network_zonal'])
-    rstu(n_zonal)
+    # rstu(n_zonal)
     n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
-    rstu(n_zonal_redispatch)
+    # rstu(n_zonal_redispatch)
 
     n_nodal = pypsa.Network(snakemake.input['network_nodal'])
-    rstu(n_nodal)
+    # rstu(n_nodal)
 
     assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
@@ -118,14 +117,6 @@ if __name__ == '__main__':
         index_col=0,
         parse_dates=True
     )
-
-    # boundaries = {
-    #     'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
-    #     'SCOTEX': [14109, 6139, 11758],
-    #     'SSHARN': [11778, 11780, 5225],
-    #     'SEIMP': [6121, 12746, 11742],
-    #     'FLOWSTH': [5203, 11528, 11764, 6203, 5207]
-    # }
 
     boundaries = {
         # 'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
@@ -160,13 +151,13 @@ if __name__ == '__main__':
     n_zonal.export_to_netcdf(snakemake.output['network_zonal'])
 
     # redispatch calculation (only used to estimate balancing volume)
-    # computes the nodal flow after wholesale commitments have been made
-    # in the wholesale market. Therefore, battery (and interconnector po-
+    # computes the nodal flow after commitments have been made in
+    # the wholesale market. Therefore, battery (and interconnector po-
     # -sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
-    # insert_battery_commitments(n_national, n_national_redispatch)
-    # insert_battery_commitments(n_zonal, n_zonal_redispatch)
+    insert_battery_commitments(n_national, n_national_redispatch)
+    insert_battery_commitments(n_zonal, n_zonal_redispatch)
 
     if snakemake.wildcards.ic == 'flex':
         insert_interconnector_commitments(n_national, n_national_redispatch)

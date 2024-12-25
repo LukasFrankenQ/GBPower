@@ -78,7 +78,6 @@ def get_roc_cost(bal, roc):
             activity = bal.storage_units_t.p[plant]
 
         else:
-            print(f'Plant {plant} not found in network')
             continue
 
         roc_payments += roc_price * activity * 0.5
