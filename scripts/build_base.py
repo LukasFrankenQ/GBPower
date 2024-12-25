@@ -54,7 +54,7 @@ pn_url = (
 
 def build_physical_notifications_period(date, period):
 
-    response = robust_request(requests.get, pn_url.format(date, period))
+    response = robust_request(requests.get, pn_url.format(date, period), wait_time=1)
     df = pd.read_csv(StringIO(response.text))
 
     df['TimeFrom'] = pd.to_datetime(df['TimeFrom'])
@@ -233,17 +233,17 @@ def get_volumes(date, period):
     
         response = requests.get(volumes_url.format(mode, date, period, unit_params))
         response.raise_for_status()
-        
+
         volumes_json = response.json()
         if 'data' in volumes_json:
             volumes_df = pd.json_normalize(volumes_json['data'])
         else:
             volumes_df = pd.DataFrame()
-        
+
         data.append(volumes_df)
-    
+
     return pd.concat(data)
-    
+
 
 def get_trades(date, period):
 
