@@ -98,7 +98,10 @@ def get_cfd_payments(n, strike_prices):
     )
 
     cfd_payments = pd.Series(0, index=n.snapshots)
-    for plant, strike_price in strike_prices.items():
+
+    for plant, strike_price in strike_prices.loc[
+        strike_prices.index.intersection(n.generators.index)
+        ].items():
 
         price_gap = (
             strike_price - n.buses_t.marginal_price[n.generators.loc[plant, 'bus']]

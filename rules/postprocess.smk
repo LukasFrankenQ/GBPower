@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+
 rule summarize_system_cost:
     input:
         bids="data/base/{day}/bids.csv",
