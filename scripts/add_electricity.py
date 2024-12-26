@@ -45,7 +45,7 @@ def scale_merit_order(
 
     if smooth_dah:
         dah = (
-            dah.rolling(8, center=True, min_periods=1)
+            dah.rolling(4, center=True, min_periods=1)
             .mean()
         )
 
@@ -261,6 +261,19 @@ def add_thermal(
         pd.Series(wholesale_prices.mean(), index=missing)
     ))
 
+    # assert plants.isin(wholesale_prices.index).all(), 'Missing wholesale prices for some thermal plants.'    
+
+    p_max_pu = mel[plants].div(mel[plants].max()).replace(np.nan, 0)
+
+    # Elexon Maximum Export Limit is sometimes missing data for thermal units
+    # in this case, all p_max_pu are 0 right now, causing a shortage of power supply.
+    # To deal with this, in the respective timesteps, they are set to 1 instead.
+    fix_mask = (p_max_pu == 0).all(axis=1)
+
+    if fix_mask.any():
+        logger.warning(f'Fixing {fix_mask.sum()} timesteps with missing thermal generation data.')
+        p_max_pu.loc[fix_mask] = 1.
+
     n.add(
         "Generator",
         plants,
@@ -268,7 +281,7 @@ def add_thermal(
         carrier=bmus.loc[plants, 'carrier'],
         p_nom=mel[plants].max(),
         marginal_cost=wholesale_prices.loc[plants],
-        p_max_pu=mel[plants].div(mel[plants].max()).replace(np.nan, 0),
+        p_max_pu=p_max_pu,
     )
 
 
@@ -538,7 +551,6 @@ def ensure_thermal_supply(n):
         n.generators.carrier.isin(['biomass', 'fossil']),
         'p_nom',
     ] *= scaling_factor
-
 
 
 def build_static_supply_curve(
