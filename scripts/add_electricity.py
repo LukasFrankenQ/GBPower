@@ -63,8 +63,11 @@ def scale_merit_order(
 
         for ic, country in interconnection_countries.items():
             try:
-                ints_marginal_cost.append(n.generators_t.marginal_cost[country.lower() + "_local_market"].iloc[period])
-                ints_marginal_cap.append(n.links.p_nom.loc[ic])
+                cost_appendix = n.generators_t.marginal_cost[country.lower() + "_local_market"].iloc[period]
+                cap_appendix = n.links.p_nom.loc[ic]
+
+                ints_marginal_cost.append(cost_appendix)
+                ints_marginal_cap.append(cap_appendix)
                 found_countries.append(country)
 
             except KeyError:
@@ -372,6 +375,9 @@ def add_hydropower(
         max_hours=pn[assets].sum().div(pn[assets].max()),
         p_min_pu=0.,
     )
+
+    # causes infeasibility, unclear why it can happen
+    n.remove('StorageUnit', n.storage_units.index[n.storage_units.state_of_charge_initial < 0.])
 
 
 def add_cascade(*args):
