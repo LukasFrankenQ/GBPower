@@ -198,7 +198,7 @@ trades_url = (
     )
 
 
-def get_accepted_units(date, period, so_only=False):
+def get_accepted_units(date, period, so_only=True):
 
     response = requests.get(accepts_url.format(date, period))
     response.raise_for_status()
@@ -517,4 +517,3 @@ if __name__ == '__main__':
             assert last_timestep == data.index.get_level_values(0)[-1], 'Last timestep mismatch.'
 
         data.to_csv(target)
-
