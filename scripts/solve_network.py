@@ -43,7 +43,7 @@ def insert_flow_constraints(
                 n.links_t.p_min_pu[line] = - flow_max_pu.values
 
 
-def insert_battery_commitments(n_from, n_to):
+def freeze_battery_commitments(n_from, n_to):
     '''
     Takes wholesale commitments of batteries and PHS from n_from and inserts them 
     into n_to, i.e. n_to HAS TO operate the respective storage units in the same
@@ -52,8 +52,8 @@ def insert_battery_commitments(n_from, n_to):
 
     for su in n_from.storage_units_t['p'].columns:
 
-        if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
-            continue
+        # if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
+        #     continue
 
         p_set = n_from.storage_units_t['p'][su]
 
@@ -69,7 +69,7 @@ def insert_battery_commitments(n_from, n_to):
         )
 
 
-def insert_interconnector_commitments(n_from, n_to):
+def freeze_interconnector_commitments(n_from, n_to):
     '''
     Takes wholesale commitments of interconnectors from n_from and inserts them 
     into n_to, i.e. n_to HAS TO operate the respective storage units in the same
@@ -156,15 +156,31 @@ if __name__ == '__main__':
     # -sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
-    insert_battery_commitments(n_national, n_national_redispatch)
-    insert_battery_commitments(n_zonal, n_zonal_redispatch)
+    freeze_battery_commitments(n_national, n_national_redispatch)
+    freeze_battery_commitments(n_zonal, n_zonal_redispatch)
 
     if snakemake.wildcards.ic == 'flex':
-        insert_interconnector_commitments(n_national, n_national_redispatch)
-        insert_interconnector_commitments(n_zonal, n_zonal_redispatch)
+        freeze_interconnector_commitments(n_national, n_national_redispatch)
+        freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
 
-    n_national_redispatch.optimize()
+    def safe_solve(n):
+
+        status = 'not_solved'
+        factor = 1
+
+        while status != 'ok':
+            logger.info("Solving with factor %s", factor)
+            n.generators.p_nom *= factor
+            status, _ = n.optimize()
+            factor *= 1.1
+
+            if factor > 10:
+                raise Exception('Failed to solve redispatch problem')
+
+    safe_solve(n_national_redispatch)
+    # n_national_redispatch.optimize()
     n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 
-    n_zonal_redispatch.optimize()
+    safe_solve(n_zonal_redispatch)
+    # n_zonal_redispatch.optimize()
     n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  

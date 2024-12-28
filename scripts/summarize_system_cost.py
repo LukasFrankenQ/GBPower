@@ -146,6 +146,11 @@ def get_bidding_volume(nat, bal):
             bal.generators_t.p[plant].sum(axis=1)
         ).clip(lower=0)
     
+    water = (
+        water
+        .intersection(bal.storage_units_t.p.columns)
+        .intersection(nat.storage_units_t.p.columns)
+    )
     bidding_volume += (
         nat.storage_units_t.p[water].sum(axis=1) -
         bal.storage_units_t.p[water].sum(axis=1)

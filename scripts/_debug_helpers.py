@@ -1,6 +1,6 @@
 '''Helpers for quick bug locating'''
 
-def remove_all_interconnectors(n):
+def remove_interconnectors(n):
     '''helper function for debugging'''
 
     for l in n.links.index[n.links.carrier == 'interconnector']:
@@ -13,7 +13,7 @@ def remove_all_interconnectors(n):
         n.remove("Load", l)
 
 
-def remove_all_storages(n):
+def remove_storage_units(n):
     '''helper function for debugging'''
 
     for s in n.storage_units.index:

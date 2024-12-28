@@ -4,10 +4,10 @@
 
 
 # This file contains rules that are not part of the main workflow because they are
-# costly to run. The files they produce are therefore shipped with the repository
+# costly to run. The files they produce are therefore shipped with the repository.
 # For transparency, the rules are still included in the Snakefile, but, by default,
-# are not run.
-# To run them, remove the protected() function from the output directive of each rule.
+# are not run (and therefore have their outputs commented out).
+# To run them, remove the `#` from the output of each rule.
 
 from datetime import datetime, timedelta
 
@@ -89,7 +89,7 @@ rule build_battery_phs_capacities:
     input:
         # Estimates battery power and energy capacities based on a large dataset of
         # historic physical notifications.
-        # Requires 300 days of data from build_base to be preset to run
+        # Requires 300 days of data from build_base to be present to run
         lambda wildcards: (
             lambda glob: (
                 lambda files: (
