@@ -370,7 +370,6 @@ def _query_entsoe_prices(countries, start, end):
 
     data = []
     for cc in countries:
-        print(f'Querying {cc}...')
         series = client.query_day_ahead_prices(cc, start=start, end=end).rename(cc)
         data.append(series)
 
