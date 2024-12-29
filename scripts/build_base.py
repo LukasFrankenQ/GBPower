@@ -33,7 +33,7 @@ from tqdm import tqdm
 from functools import wraps
 
 from io import StringIO
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, List
 from entsoe import EntsoePandasClient
 
 from _helpers import (
@@ -363,38 +363,77 @@ def build_bids_period(*args):
     return build_bm_actions_period('bids', *args)
 
 
+def _query_entsoe_prices(countries, start, end):
+    """Queries ENTSO-E API for day-ahead prices for the requested countries and date range."""
+
+    client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+
+    data = []
+    for cc in countries:
+        print(f'Querying {cc}...')
+        series = client.query_day_ahead_prices(cc, start=start, end=end).rename(cc)
+        data.append(series)
+
+    return pd.concat(data, axis=1)
+
+
 def build_europe_day_ahead_prices(date_range):
+    """
+    Builds a timeseries of day-ahead electricity market prices for European countries.
 
-    data = pd.read_csv(
-        snakemake.input.europe_day_ahead_prices,
-        index_col=0,
-        parse_dates=True
-    ).tz_localize('utc')
+    Args:
+        date_range: pandas DatetimeIndex representing the desired date range.
 
-    if date_range[0] >= data.index[0] and date_range[-1] <= data.index[-1]:
+    Returns:
+        A pandas DataFrame with day-ahead prices, with full country names as column names.
+    """
+
+  # 1. Read from CSV and ensure timezone is UTC:
+    try:
+        data = pd.read_csv(
+            snakemake.input.europe_day_ahead_prices,
+            index_col=0,
+            parse_dates=True
+        ).tz_localize('utc')
+    except FileNotFoundError:
+        data = pd.DataFrame()
+
+    # 2. Check if the local CSV data covers the requested date range, convert the input to UTC
+    date_range_utc = date_range.tz_convert('utc')
+
+    if not data.empty and date_range_utc[0] >= data.index[0] and date_range_utc[-1] <= data.index[-1]:
         return (
             data
-            .reindex(date_range, method='ffill')
-            .loc[date_range]
+            .reindex(date_range_utc, method='ffill')
+            .loc[date_range_utc]
+            .tz_convert(date_range.tz)
         )
-    elif date_range[0] > data.index[-1]:
-        raise ValueError(
-            "Queried date range {} is after the latest available date {}.".format(
-                date_range[0], data.index[-1]
-            )
+
+    COUNTRY_MAPPING = {
+        'IE_SEM': 'Ireland',
+        'DK_1': 'Denmark',
+        'FR': 'France',
+        'NL': 'Netherlands',
+        'BE': 'Belgium',
+        'NO_2_NSL': 'Norway',
+    }
+
+    # 3 & 4. Query ENTSO-E to fill gaps or all if local file is not covering the date range
+    entsoe_start = date_range_utc[0]
+    entsoe_end = date_range_utc[-1]
+    
+    entsoe_data = _query_entsoe_prices(
+        list(COUNTRY_MAPPING),
+        entsoe_start,
+        entsoe_end
         )
-    elif date_range[-1] < data.index[0]:
-        raise ValueError(
-            "Queried date range {} is before the earliest available date {}.".format(
-                date_range[-1], data.index[0]
-            )
-        )
-    else:
-        raise ValueError(
-            "Queried date range {} is not fully covered by the available data range {} to {}.".format(
-                date_range, data.index[0], data.index[-1]
-            )
-        )
+    entsoe_data.rename(columns=COUNTRY_MAPPING, inplace=True)
+
+    return (
+        entsoe_data
+        .tz_convert('utc')
+        .reindex(date_range.tz_convert('utc'), method='ffill')
+    )
 
 
 def build_boundary_flow_constraints(date_range):
