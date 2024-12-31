@@ -193,14 +193,36 @@ def get_balancing_cost(
     except KeyError:
         actual_offers = pd.DataFrame(0, index=['dummy_bmu'], columns=['vol', 'price'])
 
+    def is_faulty_price(prices):
+
+        nine_check = lambda num: str(int(num)).count('9') >= 3
+        magnitude_check = lambda num: num > 5000
+
+        return prices.apply(nine_check) | prices.apply(magnitude_check)
+
+    # there appears to be a nonzero risk of faulty prices of vast magnitude to
+    # sneak into bid/offer prices.
+    # Appears to be a very rare occurance, but still needs correction
+    # due to huge impact.
+    actual_bids.loc[
+        mask,
+        'price'
+    ] = actual_bids.loc[~(mask := is_faulty_price(actual_bids['price'])), 'price'].median()
+
+    actual_offers.loc[
+        mask,
+        'price'
+    ] = actual_offers.loc[~(mask := is_faulty_price(actual_offers['price'])), 'price'].median()
+
+
     actual_bids['cumvol'] = actual_bids['vol'].cumsum()
     actual_offers['cumvol'] = actual_offers['vol'].cumsum()
 
     model_vol = bidding_volume.sum()
     
     costs = {
-        'bid': 0,
-        'offer': 0
+        'bid': 0.,
+        'offer': 0.,
     }
 
     for mode in ['bid', 'offer']:
