@@ -20,11 +20,11 @@ rule build_base:
         flow_constraints=lambda wildcards: f"data/flow_constraints_{wildcards.day[:4]}.csv",
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
+        boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         physical_notifications="data/base/{day}/physical_notifications.csv",
         maximum_export_limits="data/base/{day}/maximum_export_limits.csv",
         offers="data/base/{day}/offers.csv",
         bids="data/base/{day}/bids.csv",
-        boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
         nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
         day_ahead_prices="data/base/{day}/day_ahead_prices.csv",
         europe_day_ahead_prices="data/base/{day}/europe_day_ahead_prices.csv",
