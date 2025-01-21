@@ -147,7 +147,7 @@ rule build_thermal_generator_prices:
         get_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        # 'data/preprocessed/thermal_costs/{year}-week{week}.csv'
+        'data/preprocessed/thermal_costs/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
@@ -257,3 +257,14 @@ rule build_zonal_layout:
         "../envs/environment.yaml",
     script:
         "../non_workflow_scripts/build_zonal_layout.py"
+
+
+rule build_flow_constraints:
+    output:
+        # flow_constraints="data/preprocessed/flow_constraints_{year}.csv"
+    resources:
+        mem_mb=4000,
+    log:
+        "../logs/flow_constraints_{year}.log",
+    script:
+        "../non_workflow_scripts/build_flow_constraints.py"

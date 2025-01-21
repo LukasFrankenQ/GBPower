@@ -96,39 +96,56 @@ def get_boundary_flow_day(date_range):
         .drop(columns=['_count'])
     )
 
-    df = df.set_index('date', append=True)['limit'].unstack().T
-    df[df >= 15_000] = np.nan
+    df.loc[df['limit'] >= 15_000, 'limit'] = np.nan
 
-    # prevents error on days where daylight saving time starts or ends
-    if day in dst_end_dates:
-        df = pd.concat((
-            df.iloc[:3],
-            df.iloc[[2]],
-            df.iloc[[3]],
-            df.iloc[3:],
-        ))
-        df.index = date_range
+    try: # ironically crashes for some daylight saving endings
+        df = df.set_index('date', append=True)['limit'].unstack().T
 
-    elif day in dst_start_dates:
+        # prevents error on days where daylight saving time starts or ends
+        if day in dst_end_dates:
+            df = pd.concat((
+                df.iloc[:3],
+                df.iloc[[2]],
+                df.iloc[[3]],
+                df.iloc[3:],
+            ))
+            df.index = date_range
 
-        try:
+        elif day in dst_start_dates:
+
+            try:
+                df.index = (
+                    pd.to_datetime(df.index)
+                    .tz_localize('Europe/London', ambiguous='infer')
+                    .tz_convert('UTC')
+                )
+            except NonExistentTimeError:
+                df = pd.concat((
+                    df.iloc[:2], df.iloc[4:]
+                ))
+                df.index = date_range
+
+        else:
             df.index = (
                 pd.to_datetime(df.index)
                 .tz_localize('Europe/London', ambiguous='infer')
                 .tz_convert('UTC')
             )
-        except NonExistentTimeError:
-            df = pd.concat((
-                df.iloc[:2], df.iloc[4:]
-            ))
-            df.index = date_range
 
-    else:
-        df.index = (
-            pd.to_datetime(df.index)
-            .tz_localize('Europe/London', ambiguous='infer')
-            .tz_convert('UTC')
-        )
+    except ValueError:
+
+        limits = []
+        for b in df.index.unique():
+
+            ss = df.loc[b, 'limit']
+            ss.index = date_range[:len(ss)]
+            ss = ss.reindex(date_range, method='ffill')
+            ss.name = b
+
+            limits.append(ss)
+
+        df = pd.concat(limits, axis=1)
+
 
     number_split = lambda x: re.split(r'\d', x, maxsplit=1)[0]
     def match_and_cut(index, true_names):
@@ -142,7 +159,7 @@ def get_boundary_flow_day(date_range):
 
     renamer = match_and_cut(df.columns, boundaries)
 
-    df = (
+    return (
         pd.concat((
             df[renamer.keys()].rename(columns=renamer),
             pd.DataFrame(
@@ -151,9 +168,6 @@ def get_boundary_flow_day(date_range):
                 )
         ), axis=1).loc[:, boundaries]
     )
-
-    return df
-
 
 
 if __name__ == '__main__':
