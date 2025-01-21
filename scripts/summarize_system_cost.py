@@ -259,7 +259,7 @@ if __name__ == '__main__':
 
     zon = pypsa.Network(snakemake.input.network_zonal) # zonal wholesale market
     zon_bal = pypsa.Network(snakemake.input.network_zonal_redispatch) # zonal system after redispatch
-    
+
     logger.info('Computing Balancing Costs')
 
     bids = pd.read_csv(snakemake.input.bids, index_col=[0,1], parse_dates=True)
