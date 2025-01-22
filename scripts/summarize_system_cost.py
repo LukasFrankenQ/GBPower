@@ -115,8 +115,8 @@ def get_bidding_volume(nat, bal):
     Returns the bidding volume of the network.
 
     Parameters:
-        nat(pypsa.Network): The national wholesale market optimum.
-        bal(pypsa.Network): The wholesale market after redispatch.
+        nat(pypsa.Network): The (national or zonal) wholesale market dispatch optimum.
+        bal(pypsa.Network): The network dispatch after balancing.
     """
 
     lat_bidding_threshold = 55.3 # groups dispatchable generators into north and south
