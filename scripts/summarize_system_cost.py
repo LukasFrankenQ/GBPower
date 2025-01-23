@@ -326,16 +326,16 @@ if __name__ == '__main__':
 
 
     logger.info("Storing marginal prices")
-    other_countries = [
+    other_countries = pd.Index([
         'Denmark', 'Belgium', 'Netherlands', 'France', 'Norway',
-    ]
+    ])
 
     def prep_marginal_prices(n, name):
+        mp = n.buses_t.marginal_price
+        mp.drop(columns=other_countries.intersection(mp.columns), inplace=True)
+
         return (
-            n
-            .buses_t
-            .marginal_price
-            .drop(columns=other_countries)
+            mp
             .stack()
             .rename(name)
             .to_frame()
