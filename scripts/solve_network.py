@@ -7,8 +7,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pypsa
+import numpy as np
 import pandas as pd
 
+from tabulate import tabulate
 from _helpers import configure_logging, set_nested_attr
 
 
@@ -85,19 +87,42 @@ def rstu(n):
         n.remove('StorageUnit', i)
 
 
+def safe_solve(n):
+
+    status = 'not_solved'
+    factor = 1
+
+    while status != 'ok':
+        logger.info("Solving with factor %s", factor)
+        n.generators.p_nom *= factor
+        status, _ = n.optimize()
+        factor *= 1.1
+
+        if factor > 10:
+            raise Exception('Failed to solve redispatch problem')
+
+    return status, factor
+
+
 if __name__ == '__main__':
 
     configure_logging(snakemake)
 
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
+    model_execution_overview = list()
+
     # national market does not need transmission calibration
     n_national = pypsa.Network(snakemake.input['network_national'])
     # print('warning: dropping storage units!')
     # rstu(n_national)
 
-    n_national.optimize()
+    status, _ = n_national.optimize()
     n_national.export_to_netcdf(snakemake.output['network_national'])
+
+    model_execution_overview.append(
+        ('national wholesale', status, '-') 
+    )
 
     n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
     # rstu(n_national_redispatch)
@@ -144,11 +169,19 @@ if __name__ == '__main__':
     insert_flow_constraints(n_zonal, *args)
     insert_flow_constraints(n_zonal_redispatch, *args)
 
-    n_nodal.optimize()
+    status, _ = n_nodal.optimize()
     n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
 
-    n_zonal.optimize()
+    model_execution_overview.append(
+        ('nodal wholesale', status, '-') 
+    )
+
+    status, _ = n_zonal.optimize()
     n_zonal.export_to_netcdf(snakemake.output['network_zonal'])
+
+    model_execution_overview.append(
+        ('zonal wholesale', status, '-') 
+    )
 
     # redispatch calculation (only used to estimate balancing volume)
     # computes the nodal flow after commitments have been made in
@@ -163,24 +196,29 @@ if __name__ == '__main__':
         freeze_interconnector_commitments(n_national, n_national_redispatch)
         freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
 
-    def safe_solve(n):
 
-        status = 'not_solved'
-        factor = 1
-
-        while status != 'ok':
-            logger.info("Solving with factor %s", factor)
-            n.generators.p_nom *= factor
-            status, _ = n.optimize()
-            factor *= 1.1
-
-            if factor > 10:
-                raise Exception('Failed to solve redispatch problem')
-
-    safe_solve(n_national_redispatch)
+    status, factor = safe_solve(n_national_redispatch)
     # n_national_redispatch.optimize()
     n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 
-    safe_solve(n_zonal_redispatch)
+    model_execution_overview.append(
+        ('national redispatch', status, str(np.around(factor, decimals=2))) 
+    )
+
+    status, factor = safe_solve(n_zonal_redispatch)
     # n_zonal_redispatch.optimize()
     n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
+
+    model_execution_overview.append(
+        ('zonal redispatch', status, str(np.around(factor, decimals=2))) 
+    )
+
+    print((title := 'Model Execution Overview'))
+    print("-" * len(title))
+    print(
+        tabulate(
+            model_execution_overview,
+            headers=['Model', 'Status', 'Factor'],
+            tablefmt='pretty'
+        )
+    )
