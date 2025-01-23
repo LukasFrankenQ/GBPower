@@ -15,6 +15,7 @@ rule summarize_system_cost:
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
     output:
+        marginal_prices="results/{day}/marginal_prices_{ic}.csv",
         system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
     resources:
         mem_mb=1500,
@@ -37,6 +38,7 @@ rule summarize_bmu_revenues:
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
+        system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
     output:
         bmu_revenues="results/{day}/bmu_revenues_{ic}.csv",
     resources:

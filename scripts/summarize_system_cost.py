@@ -323,3 +323,27 @@ if __name__ == '__main__':
         total_zonal_costs.stack().rename('zonal'),
         total_national_costs.stack().rename('national')
     ), axis=1).to_csv(snakemake.output.system_cost_summary)
+
+
+    logger.info("Storing marginal prices")
+    other_countries = [
+        'Denmark', 'Belgium', 'Netherlands', 'France', 'Norway',
+    ]
+
+    def prep_marginal_prices(n, name):
+        return (
+            n
+            .buses_t
+            .marginal_price
+            .drop(columns=other_countries)
+            .stack()
+            .rename(name)
+            .to_frame()
+            .unstack(1)
+        )
+
+    pd.concat((
+            prep_marginal_prices(nat, 'national'),
+            prep_marginal_prices(zon, 'zonal'),
+            prep_marginal_prices(nod, 'nodal'),
+        ), axis=1).to_csv(snakemake.output.marginal_prices)
