@@ -74,7 +74,7 @@ def freeze_battery_commitments(n_from, n_to):
 def freeze_interconnector_commitments(n_from, n_to):
     '''
     Takes wholesale commitments of interconnectors from n_from and inserts them 
-    into n_to, i.e. n_to HAS TO operate the respective storage units in the same
+    into n_to, i.e. n_to HAS TO operate the respective interconnectors in the same
     way as n_from.
     '''
     
@@ -189,10 +189,12 @@ if __name__ == '__main__':
     # -sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
+    logger.info('Freezing battery commitments')
     freeze_battery_commitments(n_national, n_national_redispatch)
     freeze_battery_commitments(n_zonal, n_zonal_redispatch)
 
     if snakemake.wildcards.ic == 'flex':
+        logger.info('Freezing interconnector commitments')
         freeze_interconnector_commitments(n_national, n_national_redispatch)
         freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
 
