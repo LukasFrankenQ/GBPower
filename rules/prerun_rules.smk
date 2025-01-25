@@ -119,7 +119,7 @@ rule build_battery_phs_capacities:
         "../non_workflow_scripts/build_battery_phs_capacities.py"
 
 
-def get_input_files(wildcards):
+def get_thermal_costs_input_files(wildcards):
     year = int(wildcards.year)
     week = int(wildcards.week)
 
@@ -144,7 +144,7 @@ def get_input_files(wildcards):
 
 rule build_thermal_generator_prices:
     input:
-        get_input_files,
+        get_thermal_costs_input_files,
         bmus='data/bmus_prepared.csv',
     output:
         # 'data/preprocessed/thermal_costs/{year}-week{week}.csv'
@@ -156,6 +156,45 @@ rule build_thermal_generator_prices:
         '../envs/environment.yaml',
     script:
         '../non_workflow_scripts/build_thermal_generator_prices.py'
+
+
+def get_balancing_input_files(wildcards):
+    year = int(wildcards.year)
+    week = int(wildcards.week)
+
+    week_start = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u")
+
+    dates = [week_start - timedelta(days=i) for i in range(1, 31)]
+
+    first_date_of_2022 = datetime(2022, 1, 1)
+
+    # Check if any date is before 2022-01-01
+    if any(date < first_date_of_2022 for date in dates):
+        # Use the first 30 days of 2022 instead
+        dates = [first_date_of_2022 + timedelta(days=i) for i in range(30)]
+
+    file_paths = (
+        [f'data/base/{date.strftime("%Y-%m-%d")}/offers.csv' for date in dates] +
+        [f'data/base/{date.strftime("%Y-%m-%d")}/bids.csv' for date in dates]
+
+    )
+    return file_paths
+
+
+rule build_balancing_prices:
+    input:
+        get_balancing_input_files,
+        bmus='data/bmus_prepared.csv',
+    output:
+        'data/preprocessed/balancing_prices/{year}-week{week}.csv'
+    resources:
+        mem_mb=4000,
+    log:
+        '../logs/balancing_prices/{year}-{week}.log',
+    conda:
+        '../envs/environment.yaml',
+    script:
+        '../non_workflow_scripts/build_balancing_prices.py'
 
 
 rule build_bus_regions:

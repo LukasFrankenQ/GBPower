@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2024-2024 Lukas Franken (University of Edinburgh, Octopus Energy)
+# Copyright 2024-2024 Lukas Franken (University of Edinburgh)
 # SPDX-FileCopyrightText: : 2024-2024 Lukas Franken
 #
 # SPDX-License-Identifier: MIT
