@@ -115,12 +115,21 @@ if __name__ == '__main__':
 
     configure_logging(snakemake)
 
-    actual_bids = process_daily_balancing_data(
-        pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
-    )
-    actual_offers = process_daily_balancing_data(
-        pd.read_csv(snakemake.input['offers'], index_col=[0,1], parse_dates=True)
-    )
+    actual_bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
+
+    if not actual_bids.empty:
+        actual_bids = process_daily_balancing_data(actual_bids)
+    else:
+        actual_bids = pd.DataFrame(columns=['price', 'vol'])    
+
+
+    actual_offers = pd.read_csv(snakemake.input['offers'], index_col=[0,1], parse_dates=True)
+
+    if not actual_offers.empty:
+        actual_offers = process_daily_balancing_data(actual_offers)
+    else:
+        actual_offers = pd.DataFrame(columns=['price', 'vol'])
+
 
     default_balancing_prices = pd.read_csv(
         snakemake.input['default_balancing_prices'],

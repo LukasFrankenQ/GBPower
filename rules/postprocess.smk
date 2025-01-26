@@ -3,30 +3,6 @@
 # SPDX-License-Identifier: MIT
 
 
-rule summarize_system_cost:
-    input:
-        bids="data/base/{day}/bids.csv",
-        offers="data/base/{day}/offers.csv",
-        cfd_strike_prices="data/preprocessed/cfd_strike_prices.csv",
-        roc_values="data/preprocessed/roc_values.csv",
-        network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
-        network_national="results/{day}/network_{ic}_s_national_solved.nc",
-        network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
-        network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
-    output:
-        marginal_prices="results/{day}/marginal_prices_{ic}.csv",
-        system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
-    resources:
-        mem_mb=1500,
-    log:
-        "../logs/system_cost/{day}_{ic}.log",
-    conda:
-        "../envs/environment.yaml",
-    script:
-        "../scripts/summarize_system_cost.py"
-
-
 rule summarize_bmu_revenues:
     input:
         bids="data/base/{day}/bids.csv",
@@ -38,7 +14,6 @@ rule summarize_bmu_revenues:
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
-        system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
         default_balancing_prices=lambda wildcards: 'data/preprocessed/balancing_prices/{year}-week{week}.csv'.format(
             year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
@@ -55,3 +30,30 @@ rule summarize_bmu_revenues:
         "../envs/environment.yaml",
     script:
         "../scripts/summarize_bmu_revenues.py"
+
+
+rule summarize_system_cost:
+    input:
+        bids="data/base/{day}/bids.csv",
+        offers="data/base/{day}/offers.csv",
+        cfd_strike_prices="data/preprocessed/cfd_strike_prices.csv",
+        roc_values="data/preprocessed/roc_values.csv",
+        network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
+        network_national="results/{day}/network_{ic}_s_national_solved.nc",
+        network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
+        network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
+        bmu_revenues_nodal="results/{day}/bmu_revenues_{ic}_nodal.csv",
+        bmu_revenues_zonal="results/{day}/bmu_revenues_{ic}_zonal.csv",
+        bmu_revenues_national="results/{day}/bmu_revenues_{ic}_national.csv",
+    output:
+        marginal_prices="results/{day}/marginal_prices_{ic}.csv",
+        system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/system_cost/{day}_{ic}.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../scripts/summarize_system_cost.py"

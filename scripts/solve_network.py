@@ -186,7 +186,7 @@ if __name__ == '__main__':
     # redispatch calculation (only used to estimate balancing volume)
     # computes the nodal flow after commitments have been made in
     # the wholesale market. Therefore, battery (and interconnector po-
-    # -sitions if ic wildcard == 'flex') positions are inserted into a
+    # sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
 
     logger.info('Freezing battery commitments')
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     print('')
     print((title := 'Model Execution Overview'))
-    print("-" * len(title))
+    print("-" * len(title) + '\n')
     print(
         tabulate(
             model_execution_overview,
