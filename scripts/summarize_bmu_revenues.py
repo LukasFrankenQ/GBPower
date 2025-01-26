@@ -15,6 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pypsa
+import numpy as np
 import pandas as pd
 
 from _helpers import configure_logging
@@ -140,6 +141,30 @@ if __name__ == '__main__':
         snakemake.input['network_nodal']
     )
 
+    total_balancing_volumes = {}
+
+    for layout in ['national', 'zonal']:
+
+        who = pypsa.Network(
+            snakemake.input[f'network_{layout}']
+        )
+        if not layout == 'nodal':
+            bal = pypsa.Network(
+                snakemake.input[f'network_{layout}_redispatch']
+            )
+        else:
+            bal = who.copy()
+        
+        diff = pd.concat((
+            bal.generators_t.p - who.generators_t.p,
+        ), axis=1)
+
+        total_balancing_volumes[layout] = {}
+
+        total_balancing_volumes[layout]['offers'] = diff.clip(lower=0.).sum().mul(0.5).sum()
+        total_balancing_volumes[layout]['bids'] = diff.clip(upper=0.).sum().mul(0.5).abs().sum()
+
+
     for layout in ['national', 'zonal', 'nodal']:
 
         logger.info(f'Processing revenues for {layout} layout.')
@@ -246,7 +271,7 @@ if __name__ == '__main__':
 
         cfd = get_cfd_revenue(bal, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_south.intersection(cfd.columns)]
-        revenues.loc[:, idx['south', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(float)
+        revenues.loc[:, idx['south', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(np.float64)
 
         revenues.loc[:, idx['south', 'wind', 'wholesale']] = (
             get_unit_wholesale_revenue(
@@ -266,9 +291,11 @@ if __name__ == '__main__':
             .sum(axis=1)
         )
 
-        cfd = get_cfd_revenue(bal, cfd_strike_prices)
+        logger.warning('Open question: Should CFD payments should be considered in the wholesale or balancing model?')
+        cfd = get_cfd_revenue(who, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_north.intersection(cfd.columns)]
-        revenues.loc[:, idx['north', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(float)
+
+        revenues.loc[:, idx['north', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(np.float64)
 
         wind_north_dispatch = bal.generators_t.p.loc[
             :,
@@ -485,37 +512,53 @@ if __name__ == '__main__':
             .sum(axis=1)
         )
 
-        revenues.loc[:, idx['north', 'water', 'bids']] = (
-            get_water_balancing_revenue(
-                who,
-                water_north,
-                'bids',
-                actual_bids)
-        )
 
-        revenues.loc[:, idx['north', 'water', 'offers']] = (
-            get_water_balancing_revenue(
-                who,
-                water_north,
-                'offers',
-                actual_offers)
-        )
+        if not layout == 'nodal':
 
-        revenues.loc[:, idx['south', 'water', 'bids']] = (
-            get_water_balancing_revenue(
-                who,
-                water_south,
-                'bids',
-                actual_bids)
-        )
+            bid_reduction_factor = (
+                total_balancing_volumes[layout]['bids'] /
+                total_balancing_volumes['national']['bids']
+            )
+            offer_reduction_factor = (
+                total_balancing_volumes[layout]['offers'] /
+                total_balancing_volumes['national']['offers']
+            )
 
-        revenues.loc[:, idx['south', 'water', 'offers']] = (
-            get_water_balancing_revenue(
-                who,
-                water_south,
-                'offers',
-                actual_offers)
-        )
+            revenues.loc[:, idx['north', 'water', 'bids']] = (
+                get_water_balancing_revenue(
+                    who,
+                    water_north,
+                    'bids',
+                    actual_bids)
+                    .mul(bid_reduction_factor)
+            )
+
+            revenues.loc[:, idx['north', 'water', 'offers']] = (
+                get_water_balancing_revenue(
+                    who,
+                    water_north,
+                    'offers',
+                    actual_offers)
+                    .mul(offer_reduction_factor)
+            )
+
+            revenues.loc[:, idx['south', 'water', 'bids']] = (
+                get_water_balancing_revenue(
+                    who,
+                    water_south,
+                    'bids',
+                    actual_bids)
+                    .mul(bid_reduction_factor)
+            )
+
+            revenues.loc[:, idx['south', 'water', 'offers']] = (
+                get_water_balancing_revenue(
+                    who,
+                    water_south,
+                    'offers',
+                    actual_offers)
+                    .mul(offer_reduction_factor)
+            )
 
         def get_water_roc_revenue(
                 n,
