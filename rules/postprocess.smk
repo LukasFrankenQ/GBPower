@@ -39,6 +39,10 @@ rule summarize_bmu_revenues:
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
         system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
+        default_balancing_prices=lambda wildcards: 'data/preprocessed/balancing_prices/{year}-week{week}.csv'.format(
+            year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
+            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
+        ),
     output:
         bmu_revenues="results/{day}/bmu_revenues_{ic}.csv",
     resources:

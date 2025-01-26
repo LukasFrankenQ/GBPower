@@ -186,7 +186,7 @@ rule build_balancing_prices:
         get_balancing_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        'data/preprocessed/balancing_prices/{year}-week{week}.csv'
+        # 'data/preprocessed/balancing_prices/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
