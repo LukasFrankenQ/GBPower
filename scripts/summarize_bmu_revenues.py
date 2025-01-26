@@ -15,7 +15,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pypsa
-import numpy as np
 import pandas as pd
 
 from _helpers import configure_logging
@@ -123,7 +122,7 @@ if __name__ == '__main__':
     )
 
     default_balancing_prices = pd.read_csv(
-        snakeamke.input['default_balancing_prices'],
+        snakemake.input['default_balancing_prices'],
         index_col=0
     )
 
@@ -247,7 +246,7 @@ if __name__ == '__main__':
 
         cfd = get_cfd_revenue(bal, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_south.intersection(cfd.columns)]
-        revenues.loc[:, idx['south', 'wind', 'cfd']] = cfd_revenue.sum(axis=1)
+        revenues.loc[:, idx['south', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(float)
 
         revenues.loc[:, idx['south', 'wind', 'wholesale']] = (
             get_unit_wholesale_revenue(
@@ -269,7 +268,7 @@ if __name__ == '__main__':
 
         cfd = get_cfd_revenue(bal, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_north.intersection(cfd.columns)]
-        revenues.loc[:, idx['north', 'wind', 'cfd']] = cfd_revenue.sum(axis=1)
+        revenues.loc[:, idx['north', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(float)
 
         wind_north_dispatch = bal.generators_t.p.loc[
             :,
@@ -437,7 +436,7 @@ if __name__ == '__main__':
             mode: 'offers' or 'bids'
             '''
 
-            print((
+            logger.warning((
                 'Implementation of hydropower revenue assumes that hydro'
                 'wholesale trading cant be reversed in balancing model.'
                 ))
@@ -527,6 +526,8 @@ if __name__ == '__main__':
                 ):
             '''
             n: network
+            actual_bids: actual accepted bids of that day
+            actual_offers: actual accepted offers of that day
             units: units to consider
             roc_values: ROC values
             '''
@@ -561,4 +562,4 @@ if __name__ == '__main__':
                 )
         )
 
-        revenues.to_csv(snakeamke.output[f'bmu_revenues_{layout}'])
+        revenues.to_csv(snakemake.output[f'bmu_revenues_{layout}'])

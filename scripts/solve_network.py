@@ -215,6 +215,7 @@ if __name__ == '__main__':
         ('zonal redispatch', status, str(np.around(factor, decimals=2))) 
     )
 
+    print('')
     print((title := 'Model Execution Overview'))
     print("-" * len(title))
     print(

@@ -44,7 +44,9 @@ rule summarize_bmu_revenues:
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
     output:
-        bmu_revenues="results/{day}/bmu_revenues_{ic}.csv",
+        bmu_revenues_nodal="results/{day}/bmu_revenues_{ic}_nodal.csv",
+        bmu_revenues_zonal="results/{day}/bmu_revenues_{ic}_zonal.csv",
+        bmu_revenues_national="results/{day}/bmu_revenues_{ic}_national.csv",
     resources:
         mem_mb=1500,
     log:
