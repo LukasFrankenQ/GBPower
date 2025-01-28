@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import yaml
 import pypsa
 import numpy as np
 import pandas as pd
@@ -19,7 +20,11 @@ def insert_flow_constraints(
     flow_constraints,
     boundaries,
     calibration_parameters,
+    model_name=None,
     ):
+
+    if not model_name is None:
+        logger.info(f'\nInserting flow constraints for {model_name}:\n')
 
     for boundary in flow_constraints.columns:
 
@@ -143,16 +148,8 @@ if __name__ == '__main__':
         parse_dates=True
     )
 
-    boundaries = {
-        # 'SSE-SP': [13161, 6241, 6146, 6145, 6149, 6150],
-        'SSE-SP': [13161, 6241, 6146, 6238],
-        # 'SCOTEX': [14109, 6139, 11758],
-        # 'SSHARN': [11778, 11780, 5225],
-        'SCOTEX': [14109, 6139, 11758, 8009],
-        'SSHARN': [11778, 11780, 5225, 8009],
-        'SEIMP': [6121, 12746, 11742],
-        'FLOWSTH': [5203, 11528, 11764, 6203, 5207]
-    }
+    with open(snakemake.input['transmission_boundaries']) as f:
+        boundaries = yaml.safe_load(f)
 
     calibration_parameters = {
         'SSE-SP': 0.8,
@@ -164,10 +161,10 @@ if __name__ == '__main__':
 
     args = (flow_constraints, boundaries, calibration_parameters)
 
-    insert_flow_constraints(n_nodal, *args)
-    insert_flow_constraints(n_national_redispatch, *args)
-    insert_flow_constraints(n_zonal, *args)
-    insert_flow_constraints(n_zonal_redispatch, *args)
+    insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
+    insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
+    insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
+    insert_flow_constraints(n_zonal_redispatch, *args, model_name='nodal wholesale')
 
     status, _ = n_nodal.optimize()
     n_nodal.export_to_netcdf(snakemake.output['network_nodal'])

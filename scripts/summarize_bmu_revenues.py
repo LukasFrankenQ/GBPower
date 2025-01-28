@@ -196,7 +196,23 @@ if __name__ == '__main__':
                     ['wind', 'disp', 'water'],
                     ['wholesale', 'offers', 'bids', 'cfd', 'roc'],
                     ],
+                ).append(
+                    pd.MultiIndex.from_tuples(
+                        [
+                            ['total', 'load', 'wholesale']
+                        ]
+                    )
                 ), index=who.snapshots)
+
+        revenues.loc[:, idx['total', 'load', 'wholesale']] = (
+            who
+            .statistics
+            .revenue(
+                aggregate_time=False,
+                comps='Load'
+                )
+            .loc['electricity']
+        )
 
         # groups assets into north and south, dispatchable and non-dispatchable groups
         # revenue is assigned to groups
@@ -473,8 +489,8 @@ if __name__ == '__main__':
             '''
 
             logger.warning((
-                'Implementation of hydropower revenue assumes that hydro'
-                'wholesale trading cant be reversed in balancing model.'
+                'Implementation of hydropower revenue assumes that hydro '
+                'wholesale trading cant be reversed in the balancing market.'
                 ))
 
             assert mode in ['offers', 'bids'], 'mode must be either offers or bids'

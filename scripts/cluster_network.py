@@ -462,15 +462,24 @@ if __name__ == "__main__":
             crs=zonal_layout.crs
             ).sjoin(zonal_layout)
 
+        with open(snakemake.input['transmission_boundaries']) as f:
+            boundaries = yaml.safe_load(f)
+
+        boundary_lines = reduce(lambda x, y: x + y, list(boundaries.values()))
+
         for link, row in n.links.iterrows():
             if row.carrier != 'AC':
-                continue    
+                continue
 
-            if buses.loc[row.bus0, 'name'] == buses.loc[row.bus1, 'name']:
+            cond1 = buses.loc[row.bus0, 'name'] == buses.loc[row.bus1, 'name']
+            cond2 = not link in boundary_lines
+
+            if cond1 and cond2:
                 n.links.loc[link, 'p_nom'] = np.inf
-        
+
         n.export_to_netcdf(snakemake.output["network"])
         sys.exit()
+
 
     # remove integer outputs for compatibility with PyPSA v0.26.0
     n.generators.drop("n_mod", axis=1, inplace=True, errors="ignore")

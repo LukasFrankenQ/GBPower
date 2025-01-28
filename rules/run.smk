@@ -63,6 +63,7 @@ rule cluster_network:
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
         interconnection_helpers='data/interconnection_helpers.yaml',
+        transmission_boundaries='data/transmission_boundaries.yaml',
     output:
         network="results/{day}/network_{ic}_s_{layout}.nc",
     resources:
@@ -80,6 +81,7 @@ rule solve_network:
         network_nodal="results/{day}/network_{ic}_s_nodal.nc",
         network_national="results/{day}/network_{ic}_s_national.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        transmission_boundaries='data/transmission_boundaries.yaml',
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
     output:
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
