@@ -10,6 +10,7 @@ import yaml
 import pypsa
 import numpy as np
 import pandas as pd
+import networkx as nx
 
 from tabulate import tabulate
 from _helpers import configure_logging, set_nested_attr
@@ -20,6 +21,7 @@ def insert_flow_constraints(
     flow_constraints,
     boundaries,
     calibration_parameters,
+    groupings,
     model_name=None,
     ):
 
@@ -39,6 +41,9 @@ def insert_flow_constraints(
         flow_max_pu = limit / nameplate_capacity * calibration_parameters[boundary]
 
         logger.info(f'Tuning flow constraint for {boundary} by factor {flow_max_pu.mean():.2f}')
+
+        if groupings is not None:        
+            lines = list(lines) + groupings[boundary]
 
         if lines[0] in n.lines.index:
             for line in lines:
@@ -85,6 +90,74 @@ def freeze_interconnector_commitments(n_from, n_to):
     
     ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
     n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
+
+
+def get_line_grouping(
+        buses,                # network buses
+        lines,                # network lines
+        boundaries,           # dict: boundary_name -> list of line IDs forming that boundary
+        anchor_buses          # dict: boundary_name -> list of known buses for that boundary
+    ):
+    """
+    n: The network object with n.buses and n.links
+    boundaries: e.g. {"Scotland-England": ["Line1", "Line2"], ...}
+    anchor_buses: e.g. {"Scotland-England": "BusN1", ...} for BFS to identify 'north' side
+    """
+
+    boundary_assignments = {}
+    
+    # 1) Build a graph of the entire network
+    G = nx.Graph()
+    
+    # Add all buses as nodes
+    for bus_name in buses.index:
+        G.add_node(bus_name)
+
+    # Add all lines as edges
+    for line_id in lines.index:
+        bus0 = lines.loc[line_id, 'bus0']
+        bus1 = lines.loc[line_id, 'bus1']
+        G.add_edge(bus0, bus1, key=line_id)  # store the line_id in "key" or as an attribute
+
+    # 2) Iterate over boundaries in the given order (north -> south):
+    G_tmp = G.copy()
+    for boundary_name, boundary_line_ids in boundaries.items():
+
+        # 2a) Temporarily remove boundary lines from the graph
+        #     We'll do this by making a *copy* of G and removing those edges
+        #     so as not to destroy the original.
+        for line_id in boundary_line_ids:
+            # Need to find the buses to remove the correct edge
+            bus0 = lines.loc[line_id, 'bus0']
+            bus1 = lines.loc[line_id, 'bus1']
+            if G_tmp.has_edge(bus0, bus1):
+                G_tmp.remove_edge(bus0, bus1)
+        
+    for boundary_name, boundary_line_ids in boundaries.items():
+
+        # 2b) Find which connected component contains the known "anchor bus"
+        connected_buses = list()
+
+        for bus in anchor_buses[boundary_name]:
+            # BFS (or connected_component) from anchor_bus in G_tmp
+            # This set of buses is the "north side" for this boundary
+            connected_buses += list(nx.bfs_tree(G_tmp, source=bus))
+
+        # 2c) Find all lines (edges) that have both endpoints in connected.
+        #     We want to assign them the fraction for this boundary
+        #     -- or possibly override only if they do not already have a factor assigned,
+        #        depending on your logic.
+        
+        boundary_assignments[boundary_name] = []
+
+        for line_id in lines.index:
+            b0 = lines.loc[line_id, 'bus0']
+            b1 = lines.loc[line_id, 'bus1']
+
+            if b0 in connected_buses and b1 in connected_buses:
+                boundary_assignments[boundary_name].append(line_id)
+    
+    return boundary_assignments
 
 
 def rstu(n):
@@ -159,7 +232,22 @@ if __name__ == '__main__':
         'SEIMP': 1.,
     }
 
-    args = (flow_constraints, boundaries, calibration_parameters)
+    anchors = {
+        'SSE-SP': ['6441'],
+        'SCOTEX': ['5912'],
+        'SSHARN': ['5946'],
+        'FLOWSTH': ['6010', '5250'],
+        'SEIMP': ['4977'],
+    }
+
+    groupings = get_line_grouping(
+        n_nodal.buses, 
+        n_nodal.links.loc[n_nodal.links.carrier != 'interconnector', :],
+        boundaries,
+        anchors
+        )
+
+    args = (flow_constraints, boundaries, calibration_parameters, groupings)
 
     insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
     insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
