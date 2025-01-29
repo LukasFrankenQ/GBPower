@@ -47,12 +47,12 @@ def insert_flow_constraints(
 
         if lines[0] in n.lines.index:
             for line in lines:
-                n.lines_t.s_max_pu[line] = flow_max_pu.values
-                n.lines_t.s_min_pu[line] = - flow_max_pu.values
+                n.lines_t.s_max_pu.loc[:,line] = flow_max_pu.values
+                n.lines_t.s_min_pu.loc[:,line] = - flow_max_pu.values
         else:
             for line in lines:
-                n.links_t.p_max_pu[line] = flow_max_pu.values
-                n.links_t.p_min_pu[line] = - flow_max_pu.values
+                n.links_t.p_max_pu.loc[:,line] = flow_max_pu.values
+                n.links_t.p_min_pu.loc[:,line] = - flow_max_pu.values
 
 
 def freeze_battery_commitments(n_from, n_to):
@@ -172,9 +172,10 @@ def safe_solve(n):
 
     while status != 'ok':
         logger.info("Solving with factor %s", factor)
-        n.generators.p_nom *= factor
+        # n.generators.p_nom *= factor
+        n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= factor
         status, _ = n.optimize()
-        factor *= 1.1
+        factor *= 1.05
 
         if factor > 10:
             raise Exception('Failed to solve redispatch problem')
@@ -248,6 +249,7 @@ if __name__ == '__main__':
         )
 
     args = (flow_constraints, boundaries, calibration_parameters, groupings)
+    # args = (flow_constraints, boundaries, calibration_parameters, None)
 
     insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
     insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
