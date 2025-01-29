@@ -273,9 +273,8 @@ if __name__ == '__main__':
 
     roc_values = pd.read_csv(snakemake.input.roc_values, index_col=0).iloc[:,0]
 
-    congestion_rent_compensation_share = 0.5
-    # share of congestion rents that are not interpreted
-    # and instead are assumed to be paid to the generators
+    # 1 reflects that no money is yet allocated for grandfathering
+    congestion_rent_compensation_share = 1.
 
     bidcosts, offercosts = get_balancing_cost(nat, nat_bal, bids, offers)
     total_national_costs = pd.DataFrame(
