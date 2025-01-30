@@ -1,3 +1,4 @@
+# refers to lines in the nodal layout of the model
 SSE-SP:
   - "13161"
   - "6241"
@@ -15,6 +16,7 @@ SSHARN:
   - "8009"
 SEIMP:
   - "6121"
+  - "6120"
   - "12746"
   - "11742"
 FLOWSTH:

@@ -25,6 +25,8 @@ def insert_flow_constraints(
     model_name=None,
     ):
 
+    used_lines = set()
+
     if not model_name is None:
         logger.info(f'\nInserting flow constraints for {model_name}:\n')
 
@@ -32,6 +34,8 @@ def insert_flow_constraints(
 
         limit = flow_constraints[boundary]
         lines = pd.Index(boundaries[boundary], dtype=str)
+
+        lines = lines.difference(used_lines)
 
         try:
             nameplate_capacity = n.lines.loc[lines, 's_nom'].sum()
@@ -43,16 +47,26 @@ def insert_flow_constraints(
         logger.info(f'Tuning flow constraint for {boundary} by factor {flow_max_pu.mean():.2f}')
 
         if groupings is not None:        
-            lines = list(lines) + groupings[boundary]
+            lines = lines.append(pd.Index(groupings[boundary]))
+
+        assert not any([line in used_lines for line in lines]), 'Line used in multiple boundaries'
+        used_lines.update(set(lines))
+
+        lines = pd.Index(set(lines))
 
         if lines[0] in n.lines.index:
             for line in lines:
-                n.lines_t.s_max_pu.loc[:,line] = flow_max_pu.values
-                n.lines_t.s_min_pu.loc[:,line] = - flow_max_pu.values
+                pu = pd.Series(flow_max_pu.values, index=n.snapshots, name=line)
+
+                n.lines_t.s_max_pu = pd.concat([pu, n.lines_t.s_max_pu], axis=1)
+                n.lines_t.s_min_pu = pd.concat([pu.mul(-1.), n.lines_t.s_min_pu], axis=1)
+
         else:
             for line in lines:
-                n.links_t.p_max_pu.loc[:,line] = flow_max_pu.values
-                n.links_t.p_min_pu.loc[:,line] = - flow_max_pu.values
+                pu = pd.Series(flow_max_pu.values, index=n.snapshots, name=line)
+
+                n.links_t.p_max_pu = pd.concat([pu, n.links_t.p_max_pu], axis=1)
+                n.links_t.p_min_pu = pd.concat([pu.mul(-1.), n.links_t.p_min_pu], axis=1)
 
 
 def freeze_battery_commitments(n_from, n_to):
