@@ -113,6 +113,10 @@ def get_line_grouping(
         anchor_buses          # dict: boundary_name -> list of known buses for that boundary
     ):
     """
+    Returns the lines of regions neighboring transmission boundaries such that 
+    the thermal constraints available for the boundaries themselves are also applied
+    to the regions surrounding them.
+
     n: The network object with n.buses and n.links
     boundaries: e.g. {"Scotland-England": ["Line1", "Line2"], ...}
     anchor_buses: e.g. {"Scotland-England": "BusN1", ...} for BFS to identify 'north' side
@@ -179,6 +183,10 @@ def rstu(n):
         n.remove('StorageUnit', i)
 
 
+def relax_line_capacities(n, relaxation_factor):
+    n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= relaxation_factor
+
+
 def safe_solve(n):
 
     status = 'not_solved'
@@ -187,48 +195,19 @@ def safe_solve(n):
     while status != 'ok':
         logger.info("Solving with factor %s", factor)
         # n.generators.p_nom *= factor
-        n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= factor
+        relax_line_capacities(n, factor)
         status, _ = n.optimize()
-        factor *= 1.05
+        factor *= 1.02
 
         if factor > 10:
             raise Exception('Failed to solve redispatch problem')
 
-    return status, factor
+    return status, np.around(factor, decimals=3)
 
 
 if __name__ == '__main__':
 
     configure_logging(snakemake)
-
-    logger.warning('Currently calibration unaware if tuning lines or links.')
-
-    model_execution_overview = list()
-
-    # national market does not need transmission calibration
-    n_national = pypsa.Network(snakemake.input['network_national'])
-    # print('warning: dropping storage units!')
-    # rstu(n_national)
-
-    status, _ = n_national.optimize()
-    n_national.export_to_netcdf(snakemake.output['network_national'])
-
-    model_execution_overview.append(
-        ('national wholesale', status, '-') 
-    )
-
-    n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
-    # rstu(n_national_redispatch)
-
-    n_zonal = pypsa.Network(snakemake.input['network_zonal'])
-    # rstu(n_zonal)
-    n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
-    # rstu(n_zonal_redispatch)
-
-    n_nodal = pypsa.Network(snakemake.input['network_nodal'])
-    # rstu(n_nodal)
-
-    assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
@@ -247,6 +226,12 @@ if __name__ == '__main__':
         'SEIMP': 1.,
     }
 
+    # provides the name of one bus within the cluster of buses around transmission boundaries
+    # In a transmission network where the transmission lines that constitute the boundary
+    # are removed all buses that are in the same network graph as the anchor buses are assigned
+    # as the regional interpretation of the boundaries.
+    # I.e. for instance all lines in Scotland north of SSE-SP have the same thermal constraints
+    # applied to them as the boundary itself.
     anchors = {
         'SSE-SP': ['6441'],
         'SCOTEX': ['5912'],
@@ -254,6 +239,16 @@ if __name__ == '__main__':
         'FLOWSTH': ['6010', '5250'],
         'SEIMP': ['4977'],
     }
+
+    logger.warning('Currently calibration unaware if tuning lines or links.')
+
+    model_execution_overview = list()
+
+    # national market does not need transmission calibration
+    n_national = pypsa.Network(snakemake.input['network_national'])
+    n_nodal = pypsa.Network(snakemake.input['network_nodal'])
+    n_zonal = pypsa.Network(snakemake.input['network_zonal'])
+
 
     groupings = get_line_grouping(
         n_nodal.buses, 
@@ -263,25 +258,87 @@ if __name__ == '__main__':
         )
 
     args = (flow_constraints, boundaries, calibration_parameters, groupings)
-    # args = (flow_constraints, boundaries, calibration_parameters, None)
 
-    insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
+    n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+    n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+
+    assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
+
     insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
+    insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
     insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
     insert_flow_constraints(n_zonal_redispatch, *args, model_name='nodal wholesale')
 
-    status, _ = n_nodal.optimize()
-    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
+    logger.warning((
+        '\nCurrently choosing the minimal line capacity that is feasible.\n'
+        'Could scale capacities to match balancing volume instead.\n'
+    ))
+
+    #################### National market ####################
+
+    status, _ = n_national.optimize()
+    n_national.export_to_netcdf(snakemake.output['network_national'])
 
     model_execution_overview.append(
-        ('nodal wholesale', status, '-') 
+        ('national wholesale', status, '-') 
+    )
+    freeze_battery_commitments(n_national, n_national_redispatch)
+
+    if snakemake.wildcards.ic == 'flex':
+        logger.info('Freezing interconnector commitments')
+        freeze_interconnector_commitments(n_national, n_national_redispatch)
+
+    # solved first such that line relaxation factor can also be applied to the other models
+    status, relaxation_factor = safe_solve(n_national_redispatch)
+    assert status == 'ok', f'National wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
+
+    n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
+
+    model_execution_overview.append(
+        ('national redispatch', status, str(np.around(relaxation_factor, decimals=2))) 
     )
 
+    #################### Zonal market ####################
+
+    # status, relaxation_factor = safe_solve(n_zonal) # old way of doing it
+    relax_line_capacities(n_zonal, relaxation_factor)
     status, _ = n_zonal.optimize()
+
+    assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
+
     n_zonal.export_to_netcdf(snakemake.output['network_zonal'])
 
     model_execution_overview.append(
-        ('zonal wholesale', status, '-') 
+        ('zonal wholesale', status, str(np.around(relaxation_factor, decimals=2))) 
+    )
+
+    freeze_battery_commitments(n_zonal, n_zonal_redispatch)
+    if snakemake.wildcards.ic == 'flex':
+        freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
+
+    # status, relaxation_factor = safe_solve(n_zonal_redispatch) # old way of doing it
+    relax_line_capacities(n_zonal_redispatch, relaxation_factor)
+    status, _ = n_zonal_redispatch.optimize()
+
+    assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {relaxation_factor:.2f}'
+    n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
+
+    model_execution_overview.append(
+        ('zonal redispatch', status, str(np.around(relaxation_factor, decimals=2))) 
+    )
+
+    #################### Nodal market ####################
+
+    # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
+    relax_line_capacities(n_nodal, relaxation_factor)
+    status, _ = n_nodal.optimize()
+
+    assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
+
+    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
+
+    model_execution_overview.append(
+        ('nodal wholesale', status, str(np.around(relaxation_factor, decimals=2))) 
     )
 
     # redispatch calculation (only used to estimate balancing volume)
@@ -289,32 +346,6 @@ if __name__ == '__main__':
     # the wholesale market. Therefore, battery (and interconnector po-
     # sitions if ic wildcard == 'flex') positions are inserted into a
     # nodal network layout.
-
-    logger.info('Freezing battery commitments')
-    freeze_battery_commitments(n_national, n_national_redispatch)
-    freeze_battery_commitments(n_zonal, n_zonal_redispatch)
-
-    if snakemake.wildcards.ic == 'flex':
-        logger.info('Freezing interconnector commitments')
-        freeze_interconnector_commitments(n_national, n_national_redispatch)
-        freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
-
-
-    status, factor = safe_solve(n_national_redispatch)
-    # n_national_redispatch.optimize()
-    n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
-
-    model_execution_overview.append(
-        ('national redispatch', status, str(np.around(factor, decimals=2))) 
-    )
-
-    status, factor = safe_solve(n_zonal_redispatch)
-    # n_zonal_redispatch.optimize()
-    n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
-
-    model_execution_overview.append(
-        ('zonal redispatch', status, str(np.around(factor, decimals=2))) 
-    )
 
     print('')
     print((title := 'Model Execution Overview'))

@@ -199,10 +199,27 @@ if __name__ == '__main__':
                 ).append(
                     pd.MultiIndex.from_tuples(
                         [
+                            ['total', 'intercon', 'wholesale']
+                        ]
+                    )
+                ).append(
+                    pd.MultiIndex.from_tuples(
+                        [
                             ['total', 'load', 'wholesale']
                         ]
                     )
                 ), index=who.snapshots)
+
+        revenues.loc[:, idx['total', 'intercon', 'wholesale']] = (
+            who
+            .statistics
+            .revenue(
+                aggregate_time=False,
+                comps='Link',
+                groupby='carrier',
+                )
+            .loc['interconnector']
+        )
 
         revenues.loc[:, idx['total', 'load', 'wholesale']] = (
             who
