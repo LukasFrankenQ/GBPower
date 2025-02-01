@@ -193,7 +193,7 @@ def safe_solve(n):
     factor = 1
 
     while status != 'ok':
-        logger.info("Solving with factor %s", factor)
+        logger.info(f"\nSolving with factor {factor:.2f}\n")
         # n.generators.p_nom *= factor
         relax_line_capacities(n, factor)
         status, _ = n.optimize()
@@ -267,7 +267,7 @@ if __name__ == '__main__':
     insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
     insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
     insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
-    insert_flow_constraints(n_zonal_redispatch, *args, model_name='nodal wholesale')
+    insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
 
     logger.warning((
         '\nCurrently choosing the minimal line capacity that is feasible.\n'
@@ -300,9 +300,9 @@ if __name__ == '__main__':
 
     #################### Zonal market ####################
 
-    # status, relaxation_factor = safe_solve(n_zonal) # old way of doing it
-    relax_line_capacities(n_zonal, relaxation_factor)
-    status, _ = n_zonal.optimize()
+    status, relaxation_factor = safe_solve(n_zonal) # old way of doing it
+    # relax_line_capacities(n_zonal, relaxation_factor) # new way of doing it
+    # status, _ = n_zonal.optimize()
 
     assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
 
@@ -316,9 +316,9 @@ if __name__ == '__main__':
     if snakemake.wildcards.ic == 'flex':
         freeze_interconnector_commitments(n_zonal, n_zonal_redispatch)
 
-    # status, relaxation_factor = safe_solve(n_zonal_redispatch) # old way of doing it
-    relax_line_capacities(n_zonal_redispatch, relaxation_factor)
-    status, _ = n_zonal_redispatch.optimize()
+    status, relaxation_factor = safe_solve(n_zonal_redispatch) # old way of doing it
+    # relax_line_capacities(n_zonal_redispatch, relaxation_factor) # new way of doing it
+    # status, _ = n_zonal_redispatch.optimize()
 
     assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {relaxation_factor:.2f}'
     n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
@@ -329,9 +329,9 @@ if __name__ == '__main__':
 
     #################### Nodal market ####################
 
-    # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
-    relax_line_capacities(n_nodal, relaxation_factor)
-    status, _ = n_nodal.optimize()
+    status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
+    # relax_line_capacities(n_nodal, relaxation_factor) # new way of doing it
+    # status, _ = n_nodal.optimize()
 
     assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
 

@@ -231,7 +231,7 @@ def add_nuclear(
         efficiency=1,
     )
 
-    # For nuclear units that are not constant, a 'p_max_pu' is needed
+    # For nuclear units that have varying dispatch on the modelled day, a 'p_max_pu' is needed
     for plant in plants:
         if len(pn[plant].unique()) > 1:
             n.generators_t['p_max_pu'].loc[:,plant] = pn[plant].div(pn[plant].max())
