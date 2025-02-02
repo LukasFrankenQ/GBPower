@@ -2,6 +2,7 @@ import numpy as np
 
 nice_names = {
     'wholesale': 'Wholesale Market',
+    'wholesale buying': 'Electricity Procurement',
     'roc_payments': 'Renewable Obligation Certificates',
     'cfd_payments': 'Contracts for Differences',
     'congestion_rent': 'Intra-GB Congestion Rents',
@@ -11,6 +12,8 @@ nice_names = {
 
 color_dict = {
     'wholesale': '#F78C6B',
+    'wholesale selling': '#F78C6B',
+    'wholesale buying': '#c3763c',
     'roc_payments': '#EF476F',
     'cfd_payments': '#06D6A0',
     'congestion_rent': '#FFD166',

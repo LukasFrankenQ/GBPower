@@ -199,8 +199,8 @@ if __name__ == '__main__':
                 ).append(
                     pd.MultiIndex.from_tuples(
                         [
-                            ['total', 'intercon', 'wholesale import'],
-                            ['total', 'intercon', 'wholesale export'],
+                            ['total', 'intercon', 'wholesale buying'],
+                            ['total', 'intercon', 'wholesale selling'],
                         ]
                     )
                 ).append(
@@ -211,16 +211,48 @@ if __name__ == '__main__':
                     )
                 ), index=who.snapshots)
 
-        revenues.loc[:, idx['total', 'intercon', 'wholesale']] = (
-            who
-            .statistics
-            .revenue(
-                aggregate_time=False,
-                comps='Link',
-                groupby='carrier',
-                )
-            .loc['interconnector']
+        ###### Interconnectors
+
+        inter = who.links[who.links.carrier == 'interconnector']
+
+        p0_links = who.links_t.p0.loc[:, inter.index]
+        p1_links = who.links_t.p1.loc[:, inter.index]
+
+        price_bus0 = pd.DataFrame({
+            link: who.buses_t.marginal_price[bus]
+            for link, bus in inter['bus0'].items()
+        }, index=who.snapshots)
+
+        price_bus1 = pd.DataFrame({
+            link: who.buses_t.marginal_price[bus]
+            for link, bus in inter['bus1'].items()
+        }, index=who.snapshots)
+
+        wholesale_buying = (
+            p0_links.clip(lower=0).multiply(price_bus0 * 0.5).sum(axis=1).add(
+                p1_links.clip(lower=0).multiply(price_bus1 * 0.5).sum(axis=1),
+                axis=0
+            )
+            .multiply(-1)
         )
+
+        revenues.loc[:, idx['total', 'intercon', 'wholesale buying']] = (
+            wholesale_buying
+        )
+
+        wholesale_selling = (
+            p0_links.clip(upper=0).multiply(price_bus0 * 0.5).sum(axis=1).add(
+                p1_links.clip(upper=0).multiply(price_bus1 * 0.5).sum(axis=1),
+                axis=0
+            )
+            .multiply(-1)
+        )
+
+        revenues.loc[:, idx['total', 'intercon', 'wholesale selling']] = (
+            wholesale_selling
+        )
+
+        ###### Total Cost
 
         revenues.loc[:, idx['total', 'load', 'wholesale']] = (
             who
@@ -230,6 +262,7 @@ if __name__ == '__main__':
                 comps='Load'
                 )
             .loc['electricity']
+            .mul(0.5)
         )
 
         # groups assets into north and south, dispatchable and non-dispatchable groups
@@ -745,16 +778,30 @@ if __name__ == '__main__':
 
             return scaled_dispatch.sum(axis=1)
 
-
         dispatch.loc[:, idx['south', 'water', 'roc']] = compute_water_roc_dispatch(who, water_south, actual_bids, actual_offers)
         dispatch.loc[:, idx['north', 'water', 'roc']] = compute_water_roc_dispatch(who, water_north, actual_bids, actual_offers)
 
         # TOTAL INTERCONNECTOR & LOAD:
         intercon_links = who.links.index[who.links.carrier == 'interconnector']
-        if not intercon_links.empty:
-            dispatch.loc[:, idx['total', 'intercon', 'wholesale']] = who.links_t.p0.loc[:, intercon_links].sum(axis=1)
-        else:
-            dispatch.loc[:, idx['total', 'intercon', 'wholesale']] = 0.
+
+        p0_links = who.links_t.p0.loc[:, intercon_links]
+        p1_links = who.links_t.p1.loc[:, intercon_links]
+
+        dispatch.loc[:, idx['total', 'intercon', 'wholesale selling']] = (
+            p0_links.clip(lower=0).sum(axis=1).add(
+                p1_links.clip(lower=0).sum(axis=1),
+                axis=0
+            )
+            .multiply(0.5)
+        )
+
+        dispatch.loc[:, idx['total', 'intercon', 'wholesale buying']] = (
+            p0_links.clip(upper=0).sum(axis=1).add(
+                p1_links.clip(upper=0).sum(axis=1),
+                axis=0
+            )
+            .multiply(0.5)
+        )
 
         if 'carrier' in who.loads.columns:
             load_units = who.loads.index[who.loads.carrier=='electricity']
