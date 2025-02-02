@@ -21,6 +21,20 @@ color_dict = {
     'bid_cost': '#118AB2',
 }
 
+carrier_colors = {
+    "onwind": "#7ac677",
+    "offwind": "#6895dd",
+    "hydro": "#0079c1",
+    "biomass": "#dbc263",
+    "fossil": "#f6986b",
+    "nuclear": '#549ca2',
+    "imports": "#dd75b0",
+    "cascade": "#0079c1",
+    "PHS": "#46caf0",
+    "solar": "#f9d002",
+    "battery": '#ace37f',
+}
+
 def stack_to_ax(df, ax, text_y_offset=0.2):
 
     s = df.sum()

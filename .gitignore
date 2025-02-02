@@ -4,6 +4,7 @@ data/bundle/
 data/base/
 
 scripts/__pycache__/
+*/__pycache__/
 scripts/_tokens.py
 .snakemake/
 logs/
