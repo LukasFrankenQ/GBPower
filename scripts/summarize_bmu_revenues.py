@@ -199,7 +199,8 @@ if __name__ == '__main__':
                 ).append(
                     pd.MultiIndex.from_tuples(
                         [
-                            ['total', 'intercon', 'wholesale']
+                            ['total', 'intercon', 'wholesale import'],
+                            ['total', 'intercon', 'wholesale export'],
                         ]
                     )
                 ).append(
