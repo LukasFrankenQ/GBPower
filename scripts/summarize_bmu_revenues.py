@@ -256,7 +256,6 @@ if __name__ == '__main__':
             bal.generators_t.p - who.generators_t.p,
         ), axis=1)
 
-
         ####              REVENUE OF SOUTHERN WIND GENERATORS
 
         # balancing offers of southern wind generators can be overestimated by
@@ -648,3 +647,107 @@ if __name__ == '__main__':
         )
 
         revenues.to_csv(snakemake.output[f'bmu_revenues_{layout}'])
+
+        # --- Track Dispatch
+        #
+        # Create a dataframe with the same multi-index columns as revenues.
+        dispatch = pd.DataFrame(
+            0.,
+            index=who.snapshots,
+            columns=revenues.columns
+        )
+
+        # WIND:
+        # Wholesale: use the wholesale model generator dispatch.
+        dispatch.loc[:, idx['south', 'wind', 'wholesale']] = who.generators_t.p.loc[:, wind_south].sum(axis=1)
+        dispatch.loc[:, idx['north', 'wind', 'wholesale']] = who.generators_t.p.loc[:, wind_north].sum(axis=1)
+
+        # Balancing offers / bids:
+        # For south wind, we already adjusted offers (and transferred some to disp).
+        dispatch.loc[:, idx['south', 'wind', 'offers']] = south_wind_offers
+        dispatch.loc[:, idx['south', 'wind', 'bids']] = diff.loc[:, wind_south].sum(axis=1).clip(upper=0)
+        dispatch.loc[:, idx['north', 'wind', 'offers']] = diff.loc[:, wind_north].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx['north', 'wind', 'bids']] = diff.loc[:, wind_north].sum(axis=1).clip(upper=0)
+
+        # CFD: use the dispatch of plants for which CFD strike prices exist.
+        csouth = wind_south.intersection(cfd_strike_prices.index)
+        cnorth = wind_north.intersection(cfd_strike_prices.index)
+        if not csouth.empty:
+            dispatch.loc[:, idx['south', 'wind', 'cfd']] = bal.generators_t.p.loc[:, csouth].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['south', 'wind', 'cfd']] = 0.
+        if not cnorth.empty:
+            dispatch.loc[:, idx['north', 'wind', 'cfd']] = who.generators_t.p.loc[:, cnorth].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['north', 'wind', 'cfd']] = 0.
+
+        # ROC: use the balancing model’s dispatch for those units with ROC values.
+        rnorth = wind_north.intersection(roc_values.index)
+        rsouth = wind_south.intersection(roc_values.index)
+        if not rsouth.empty:
+            dispatch.loc[:, idx['south', 'wind', 'roc']] = bal.generators_t.p.loc[:, rsouth].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['south', 'wind', 'roc']] = 0.
+        if not rnorth.empty:
+            dispatch.loc[:, idx['north', 'wind', 'roc']] = bal.generators_t.p.loc[:, rnorth].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['north', 'wind', 'roc']] = 0.
+
+        # DISPATCHABLE (disp):
+        dispatch.loc[:, idx['south', 'disp', 'wholesale']] = who.generators_t.p.loc[:, disp_south].sum(axis=1)
+        dispatch.loc[:, idx['north', 'disp', 'wholesale']] = who.generators_t.p.loc[:, disp_north].sum(axis=1)
+
+        dispatch.loc[:, idx['south', 'disp', 'offers']] = diff.loc[:, disp_south].sum(axis=1).clip(lower=0) + south_wind_transfer
+        dispatch.loc[:, idx['north', 'disp', 'offers']] = diff.loc[:, disp_north].sum(axis=1).clip(lower=0)
+
+        dispatch.loc[:, idx['south', 'disp', 'bids']] = diff.loc[:, disp_south].sum(axis=1).clip(upper=0)
+        dispatch.loc[:, idx['north', 'disp', 'bids']] = diff.loc[:, disp_north].sum(axis=1).clip(upper=0)
+
+        # WATER:
+        dispatch.loc[:, idx['south', 'water', 'wholesale']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1)
+        dispatch.loc[:, idx['north', 'water', 'wholesale']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1)
+
+        dispatch.loc[:, idx['south', 'water', 'offers']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx['south', 'water', 'bids']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1).clip(upper=0)
+        dispatch.loc[:, idx['north', 'water', 'offers']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx['north', 'water', 'bids']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1).clip(upper=0)
+
+        # For water ROC, mimic the scaling in get_water_roc_revenue but report the scaled dispatch.
+        def compute_water_roc_dispatch(network, units, actual_bids, actual_offers):
+            units = units.intersection(network.storage_units.index)
+
+            if units.empty:
+                return pd.Series(0., index=network.snapshots)
+
+            units_dispatch = network.storage_units_t.p.loc[:, units].clip(lower=0)
+            total_dispatch = units_dispatch.sum().sum() * 0.5
+
+            if total_dispatch == 0:
+                return pd.Series(0., index=network.snapshots)
+
+            bid_volume = actual_bids.loc[units.intersection(actual_bids.index), 'vol'].sum() if not actual_bids.empty else 0.
+            offer_volume = actual_offers.loc[units.intersection(actual_offers.index), 'vol'].sum() if not actual_offers.empty else 0.
+
+            scale_factor = (total_dispatch + offer_volume - bid_volume) / total_dispatch
+            scaled_dispatch = units_dispatch * scale_factor
+
+            return scaled_dispatch.sum(axis=1)
+
+
+        dispatch.loc[:, idx['south', 'water', 'roc']] = compute_water_roc_dispatch(who, water_south, actual_bids, actual_offers)
+        dispatch.loc[:, idx['north', 'water', 'roc']] = compute_water_roc_dispatch(who, water_north, actual_bids, actual_offers)
+
+        # TOTAL INTERCONNECTOR & LOAD:
+        intercon_links = who.links.index[who.links.carrier == 'interconnector']
+        if not intercon_links.empty:
+            dispatch.loc[:, idx['total', 'intercon', 'wholesale']] = who.links_t.p0.loc[:, intercon_links].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['total', 'intercon', 'wholesale']] = 0.
+
+        if 'carrier' in who.loads.columns:
+            load_units = who.loads.index[who.loads.carrier=='electricity']
+            dispatch.loc[:, idx['total', 'load', 'wholesale']] = who.loads_t.p.loc[:, load_units].sum(axis=1)
+        else:
+            dispatch.loc[:, idx['total', 'load', 'wholesale']] = who.loads_t.p.sum(axis=1)
+
+        dispatch.to_csv(snakemake.output[f'bmu_dispatch_{layout}'])

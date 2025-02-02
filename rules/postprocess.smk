@@ -22,6 +22,9 @@ rule summarize_bmu_revenues:
         bmu_revenues_nodal="results/{day}/bmu_revenues_{ic}_nodal.csv",
         bmu_revenues_zonal="results/{day}/bmu_revenues_{ic}_zonal.csv",
         bmu_revenues_national="results/{day}/bmu_revenues_{ic}_national.csv",
+        bmu_dispatch_nodal="results/{day}/bmu_dispatch_{ic}_nodal.csv",
+        bmu_dispatch_zonal="results/{day}/bmu_dispatch_{ic}_zonal.csv",
+        bmu_dispatch_national="results/{day}/bmu_dispatch_{ic}_national.csv",
     resources:
         mem_mb=1500,
     log:
