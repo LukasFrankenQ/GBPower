@@ -383,11 +383,11 @@ if __name__ == '__main__':
         )
 
         if north_wind_offers.sum() > 0:
-            
+
             actual_north_wind_offer_vol = actual_offers.loc[
                 actual_offers.index.intersection(wind_north), 'vol'
                 ]
-
+            
             if actual_north_wind_offer_vol.sum() > 0:
                 north_wind_offer_price = get_weighted_avg_price(
                     actual_offers.loc[actual_offers.index.intersection(wind_north), :]
@@ -395,7 +395,13 @@ if __name__ == '__main__':
 
             else:
                 north_wind_offer_price = default_balancing_prices.loc['wind', 'offers']
-            
+                safe_value = 150.
+                
+                if north_wind_offer_price > safe_value:
+                    logger.warning('crudely correcting for excessive offer price.')
+
+                north_wind_offer_price = min(north_wind_offer_price, safe_value)
+
             revenues.loc[:, idx['north', 'wind', 'offers']] = (
                 north_wind_offers
                 * north_wind_offer_price
@@ -556,14 +562,19 @@ if __name__ == '__main__':
 
         if not layout == 'nodal':
 
-            bid_reduction_factor = (
-                total_balancing_volumes[layout]['bids'] /
-                total_balancing_volumes['national']['bids']
-            )
-            offer_reduction_factor = (
-                total_balancing_volumes[layout]['offers'] /
-                total_balancing_volumes['national']['offers']
-            )
+            logger.warning('Logic of water balancing volumes could warrant more thinking')
+
+            # bid_reduction_factor = (
+            #     total_balancing_volumes[layout]['bids'] /
+            #     total_balancing_volumes['national']['bids'],
+            # )
+            bid_reduction_factor = 1.
+
+            # offer_reduction_factor = (
+            #     total_balancing_volumes[layout]['offers'] /
+            #     total_balancing_volumes['national']['offers']
+            # )
+            offer_reduction_factor = 1.
 
             revenues.loc[:, idx['north', 'water', 'bids']] = (
                 get_water_balancing_revenue(
