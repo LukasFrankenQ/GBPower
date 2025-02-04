@@ -15,14 +15,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 import re
+import sys
 import requests
 import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
 from urllib import parse
+from pathlib import Path
 from pytz.exceptions import NonExistentTimeError
 
+sys.path.append(str(Path.cwd() / 'scripts'))
 from _helpers import configure_logging
 from _constants import dst_start_dates, dst_end_dates, build_sp_register
 
