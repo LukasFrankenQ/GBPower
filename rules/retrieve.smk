@@ -7,7 +7,11 @@
 rule build_base:
     input:
         europe_day_ahead_prices="data/europe_day_ahead_prices_GBP.csv",
-        flow_constraints=lambda wildcards: f"data/preprocessed/flow_constraints_{wildcards.day[:4]}.csv",
+        flow_constraints=lambda wildcards: (
+            f"data/preprocessed/flow_constraints_{wildcards.day[:4]}.csv"
+            if wildcards.day[:4] != "2025" else
+            f"data/preprocessed/flow_constraints_2024.csv"
+        ),
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",

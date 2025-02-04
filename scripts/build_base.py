@@ -443,11 +443,13 @@ def build_boundary_flow_constraints(date_range):
         parse_dates=True
     )
 
-    try:
-        return year_data.loc[date_range]
-        
-    except KeyError:
-        df = get_boundary_flow_day(date_range)
+    if date_range[4].year < 2025:
+        try:
+            return year_data.loc[date_range]
+        except KeyError:
+            pass
+
+    df = get_boundary_flow_day(date_range)
 
     try:
         # method does not work if at any timesteps data is missing for all boundaries
