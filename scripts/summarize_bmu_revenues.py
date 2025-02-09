@@ -5,318 +5,329 @@
 # SPDX-License-Identifier: MIT
 
 """
-Estimates the revenues for each BMUs including wholesale, (constraint
-managing) balancing, cfd payments and (estimated) ROC revenue.
+Estimates the revenues for each BMU (balancing mechanism unit) including:
+  - Wholesale revenues,
+  - Balancing (constraint managing) market bids/offers,
+  - CFD payments, and
+  - (Estimated) ROC revenue.
 
+This updated version splits the storage (formerly “water”) assets into:
+  - One-way generation assets (labeled "hydro") which include carriers "cascade" and "hydro", and
+  - Two-way storage assets (labeled "storage") which include carriers "PHS" and "battery".
 """
 
 import logging
 
-logger = logging.getLogger(__name__)
-
-import pypsa
 import numpy as np
 import pandas as pd
-
+import pypsa
 from _helpers import configure_logging
 
+logger = logging.getLogger(__name__)
 idx = pd.IndexSlice
 
 
 def get_unit_wholesale_revenue(n, comp, unit):
     if isinstance(unit, str):
         return (
-            getattr(n, comp+'_t').p[unit].multiply(
+            getattr(n, comp + "_t").p[unit].multiply(
                 0.5 * n.buses_t.marginal_price[getattr(n, comp).bus[unit]]
-                )
-            .rename(unit)
-        )
+            )
+        ).rename(unit)
     elif isinstance(unit, pd.Index):
         m_prices = n.buses_t.marginal_price[getattr(n, comp).bus[unit]]
         m_prices.columns = unit
-
-        commodities = getattr(n, comp+'_t').p[unit]
-
-        return (
-            commodities.multiply(0.5 * m_prices)
-        )
-    
+        commodities = getattr(n, comp + "_t").p[unit]
+        return commodities.multiply(0.5 * m_prices)
     else:
-        assert False, 'unit must be either a string or a pd.Index'
+        assert False, "unit must be either a string or a pd.Index"
 
 
 def get_cfd_revenue(n, strike_prices):
-
     strike_prices = strike_prices.copy()
     strike_prices.columns = pd.to_datetime(strike_prices.columns)
-
-    strike_prices = (
-        strike_prices
-        .loc[:,:n.snapshots[4]]
-        .iloc[:,-1]
-    )
-
+    strike_prices = strike_prices.loc[:, : n.snapshots[4]].iloc[:, -1]
     cfd_plants = strike_prices.index.intersection(n.generators.index)
-
     cfd_payments = pd.DataFrame(columns=cfd_plants, index=n.snapshots)
-
     for plant, strike_price in strike_prices.loc[cfd_plants].items():
-
         price_gap = (
-            strike_price - n.buses_t.marginal_price[n.generators.loc[plant, 'bus']]
+            strike_price
+            - n.buses_t.marginal_price[n.generators.loc[plant, "bus"]]
         )
         cfd_payments.loc[:, plant] = n.generators_t.p[plant] * price_gap * 0.5
-    
     return cfd_payments
 
 
 def process_daily_balancing_data(df):
     df = (
-        df
-        .stack()
+        df.stack()
         .unstack(1)
         .dropna()
         .groupby(level=1)
-        .agg({'price': 'mean', 'vol': 'sum'})
-        .sort_values('price')
+        .agg({"price": "mean", "vol": "sum"})
+        .sort_values("price")
     )
     return df
 
 
-def make_north_south_split(
-        n,
-        carrier,
-        comp,
-        threshold=55.3
-        ):
-
+def make_north_south_split(n, carrier, comp, threshold=55.3):
     comp_df = getattr(n, comp)
-    comp_df['lat'] = comp_df.bus.map(n.buses.y)
-
+    comp_df["lat"] = comp_df.bus.map(n.buses.y)
     if not isinstance(carrier, str):
-        mask = comp_df['carrier'].isin(carrier)
+        mask = comp_df["carrier"].isin(carrier)
     else:
-        mask = comp_df['carrier'].str.contains(carrier)
-
-    north = comp_df.loc[mask & (comp_df['lat'] > threshold)].index
-    south = comp_df.loc[mask & (comp_df['lat'] <= threshold)].index
-
+        mask = comp_df["carrier"].str.contains(carrier)
+    north = comp_df.loc[mask & (comp_df["lat"] > threshold)].index
+    south = comp_df.loc[mask & (comp_df["lat"] <= threshold)].index
     return north, south
 
 
 def get_weighted_avg_price(df):
-    assert set(df.columns) == {'price', 'vol'}, 'Columns must be price and vol'
-    assert not df.empty, 'DataFrame must not be empty'
+    assert set(df.columns) == {"price", "vol"}, "Columns must be price and vol"
+    assert not df.empty, "DataFrame must not be empty"
+    return (df["price"] * df["vol"]).sum() / df["vol"].sum()
 
-    return (df['price'] * df['vol']).sum() / df['vol'].sum()
+
+# === RENAMED STORAGE FUNCTIONS (formerly "water") ===
+
+def get_storage_balancing_revenue(who, units, mode, actual_trades):
+    """
+    Calculates the balancing revenue for storage units.
+
+    who: wholesale model network.
+    units: the storage units (a list/index of units).
+    mode: either "offers" or "bids".
+    actual_trades: a DataFrame of actual trade data with columns ["price", "vol"].
+
+    Note: This implementation assumes that storage wholesale trading cannot be reversed in the balancing market.
+    """
+    logger.warning(
+        "Implementation of storage balancing revenue assumes that storage wholesale trading "
+        "cannot be reversed in the balancing market."
+    )
+    assert mode in ["offers", "bids"], 'mode must be either "offers" or "bids"'
+    actual = actual_trades.loc[actual_trades.index.intersection(units)]
+    total_actual_volume = actual["vol"].sum()
+    if total_actual_volume == 0:
+        return pd.Series(0.0, index=who.snapshots)
+    actual_revenue = (actual["price"] * actual["vol"]).sum()
+    kwargs = {"lower": 0.0} if mode == "offers" else {"upper": 0.0}
+    trading_profile = (
+        who.storage_units_t.p[units].sum(axis=1).clip(**kwargs).abs()
+    )
+    if trading_profile.sum() == 0:
+        return pd.Series(actual_revenue / len(who.snapshots), index=who.snapshots)
+    trading_profile = trading_profile.div(trading_profile.sum())
+    return trading_profile.multiply(actual_revenue)
 
 
-if __name__ == '__main__':
+def get_storage_roc_revenue(n, actual_bids, actual_offers, units, roc_values):
+    """
+    Calculates ROC revenue for storage units.
 
+    n: network.
+    actual_bids: actual accepted bids DataFrame.
+    actual_offers: actual accepted offers DataFrame.
+    units: the storage units to consider.
+    roc_values: ROC values (a Series with unit indices).
+    """
+    units = units.copy().intersection(roc_values.index)
+    if units.empty:
+        return pd.Series(0.0, index=n.snapshots)
+    bid_volume = actual_bids.loc[units.intersection(actual_bids.index)].vol.sum()
+    offer_volume = actual_offers.loc[units.intersection(actual_offers.index)].vol.sum()
+    units_dispatch = n.storage_units_t.p[units].clip(lower=0.0)
+    total_dispatch = units_dispatch.sum().sum() * 0.5
+    units_dispatch *= ((total_dispatch + offer_volume - bid_volume) / total_dispatch)
+    return units_dispatch.multiply(roc_values.loc[units_dispatch.columns] / 2).sum(
+        axis=1
+    )
+
+
+def compute_storage_roc_dispatch(network, units, actual_bids, actual_offers):
+    """
+    Computes the scaled dispatch for ROC revenue calculations for storage units.
+
+    network: the wholesale network.
+    units: the storage units to consider.
+    actual_bids: actual bids DataFrame.
+    actual_offers: actual offers DataFrame.
+    """
+    units = units.intersection(network.storage_units.index)
+    if units.empty:
+        return pd.Series(0.0, index=network.snapshots)
+    units_dispatch = network.storage_units_t.p.loc[:, units].clip(lower=0)
+    total_dispatch = units_dispatch.sum().sum() * 0.5
+    if total_dispatch == 0:
+        return pd.Series(0.0, index=network.snapshots)
+    bid_volume = (
+        actual_bids.loc[units.intersection(actual_bids.index), "vol"].sum()
+        if not actual_bids.empty
+        else 0.0
+    )
+    offer_volume = (
+        actual_offers.loc[units.intersection(actual_offers.index), "vol"].sum()
+        if not actual_offers.empty
+        else 0.0
+    )
+    scale_factor = (total_dispatch + offer_volume - bid_volume) / total_dispatch
+    scaled_dispatch = units_dispatch * scale_factor
+    return scaled_dispatch.sum(axis=1)
+
+
+if __name__ == "__main__":
     configure_logging(snakemake)
 
-    actual_bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
-
+    actual_bids = pd.read_csv(
+        snakemake.input["bids"], index_col=[0, 1], parse_dates=True
+    )
     if not actual_bids.empty:
         actual_bids = process_daily_balancing_data(actual_bids)
     else:
-        actual_bids = pd.DataFrame(columns=['price', 'vol'])    
+        actual_bids = pd.DataFrame(columns=["price", "vol"])
 
-
-    actual_offers = pd.read_csv(snakemake.input['offers'], index_col=[0,1], parse_dates=True)
-
+    actual_offers = pd.read_csv(
+        snakemake.input["offers"], index_col=[0, 1], parse_dates=True
+    )
     if not actual_offers.empty:
         actual_offers = process_daily_balancing_data(actual_offers)
     else:
-        actual_offers = pd.DataFrame(columns=['price', 'vol'])
-
+        actual_offers = pd.DataFrame(columns=["price", "vol"])
 
     default_balancing_prices = pd.read_csv(
-        snakemake.input['default_balancing_prices'],
-        index_col=0
+        snakemake.input["default_balancing_prices"], index_col=0
     )
 
     cfd_strike_prices = pd.read_csv(
-        snakemake.input['cfd_strike_prices'],
+        snakemake.input["cfd_strike_prices"],
         index_col=0,
-        parse_dates=True
-        )
-
-    roc_values = pd.read_csv(
-        snakemake.input['roc_values'],
-        index_col=0).iloc[:,0]
-    
-    nodal_network = pypsa.Network(
-        snakemake.input['network_nodal']
+        parse_dates=True,
     )
+
+    roc_values = pd.read_csv(snakemake.input["roc_values"], index_col=0).iloc[:, 0]
+
+    nodal_network = pypsa.Network(snakemake.input["network_nodal"])
 
     total_balancing_volumes = {}
 
-    for layout in ['national', 'zonal']:
-
-        who = pypsa.Network(
-            snakemake.input[f'network_{layout}']
-        )
-        if not layout == 'nodal':
-            bal = pypsa.Network(
-                snakemake.input[f'network_{layout}_redispatch']
-            )
+    for layout in ["national", "zonal"]:
+        who = pypsa.Network(snakemake.input[f"network_{layout}"])
+        if layout != "nodal":
+            bal = pypsa.Network(snakemake.input[f"network_{layout}_redispatch"])
         else:
             bal = who.copy()
-        
-        diff = pd.concat((
-            bal.generators_t.p - who.generators_t.p,
-        ), axis=1)
 
+        diff = pd.concat((bal.generators_t.p - who.generators_t.p,), axis=1)
         total_balancing_volumes[layout] = {}
-
-        total_balancing_volumes[layout]['offers'] = diff.clip(lower=0.).sum().mul(0.5).sum()
-        total_balancing_volumes[layout]['bids'] = diff.clip(upper=0.).sum().mul(0.5).abs().sum()
-
-
-    for layout in ['national', 'zonal', 'nodal']:
-
-        logger.info(f'Processing revenues for {layout} layout.')
-
-        who = pypsa.Network(
-            snakemake.input[f'network_{layout}']
+        total_balancing_volumes[layout]["offers"] = (
+            diff.clip(lower=0.0).sum().mul(0.5).sum()
         )
-        if not layout == 'nodal':
-            bal = pypsa.Network(
-                snakemake.input[f'network_{layout}_redispatch']
-            )
+        total_balancing_volumes[layout]["bids"] = (
+            diff.clip(upper=0.0).sum().mul(0.5).abs().sum()
+        )
+
+    for layout in ["national", "zonal", "nodal"]:
+        logger.info(f"Processing revenues for {layout} layout.")
+        who = pypsa.Network(snakemake.input[f"network_{layout}"])
+        if layout != "nodal":
+            bal = pypsa.Network(snakemake.input[f"network_{layout}_redispatch"])
         else:
             bal = who.copy()
 
         revenues = pd.DataFrame(
-            0.,
+            0.0,
             columns=pd.MultiIndex.from_product(
                 [
-                    ['north', 'south'],
-                    ['wind', 'disp', 'water'],
-                    ['wholesale', 'offers', 'bids', 'cfd', 'roc'],
-                    ],
-                ).append(
-                    pd.MultiIndex.from_tuples(
-                        [
-                            ['total', 'intercon', 'wholesale buying'],
-                            ['total', 'intercon', 'wholesale selling'],
-                        ]
-                    )
-                ).append(
-                    pd.MultiIndex.from_tuples(
-                        [
-                            ['total', 'load', 'wholesale']
-                        ]
-                    )
-                ), index=who.snapshots)
+                    ["north", "south"],
+                    ["wind", "disp", "hydro", "storage"],
+                    ["wholesale", "offers", "bids", "cfd", "roc"],
+                ]
+            )
+            .append(
+                pd.MultiIndex.from_tuples(
+                    [
+                        ("total", "intercon", "wholesale buying"),
+                        ("total", "intercon", "wholesale selling"),
+                    ]
+                )
+            )
+            .append(pd.MultiIndex.from_tuples([("total", "load", "wholesale")])),
+            index=who.snapshots,
+        )
 
-        ###### Interconnectors
-
-        inter = who.links[who.links.carrier == 'interconnector']
-
+        # Interconnectors
+        inter = who.links[who.links.carrier == "interconnector"]
         p0_links = who.links_t.p0.loc[:, inter.index]
         p1_links = who.links_t.p1.loc[:, inter.index]
-
-        price_bus0 = pd.DataFrame({
-            link: who.buses_t.marginal_price[bus]
-            for link, bus in inter['bus0'].items()
-        }, index=who.snapshots)
-
-        price_bus1 = pd.DataFrame({
-            link: who.buses_t.marginal_price[bus]
-            for link, bus in inter['bus1'].items()
-        }, index=who.snapshots)
-
+        price_bus0 = pd.DataFrame(
+            {link: who.buses_t.marginal_price[bus] for link, bus in inter["bus0"].items()},
+            index=who.snapshots,
+        )
+        price_bus1 = pd.DataFrame(
+            {link: who.buses_t.marginal_price[bus] for link, bus in inter["bus1"].items()},
+            index=who.snapshots,
+        )
         wholesale_buying = (
-            p0_links.clip(lower=0).multiply(price_bus0 * 0.5).sum(axis=1).add(
-                p1_links.clip(lower=0).multiply(price_bus1 * 0.5).sum(axis=1),
-                axis=0
-            )
+            p0_links.clip(lower=0)
+            .multiply(price_bus0 * 0.5)
+            .sum(axis=1)
+            .add(p1_links.clip(lower=0).multiply(price_bus1 * 0.5).sum(axis=1), axis=0)
             .multiply(-1)
         )
-
-        revenues.loc[:, idx['total', 'intercon', 'wholesale buying']] = (
-            wholesale_buying
-        )
-
+        revenues.loc[:, idx["total", "intercon", "wholesale buying"]] = wholesale_buying
         wholesale_selling = (
-            p0_links.clip(upper=0).multiply(price_bus0 * 0.5).sum(axis=1).add(
-                p1_links.clip(upper=0).multiply(price_bus1 * 0.5).sum(axis=1),
-                axis=0
-            )
+            p0_links.clip(upper=0)
+            .multiply(price_bus0 * 0.5)
+            .sum(axis=1)
+            .add(p1_links.clip(upper=0).multiply(price_bus1 * 0.5).sum(axis=1), axis=0)
             .multiply(-1)
         )
+        revenues.loc[:, idx["total", "intercon", "wholesale selling"]] = wholesale_selling
 
-        revenues.loc[:, idx['total', 'intercon', 'wholesale selling']] = (
-            wholesale_selling
-        )
-
-        ###### Total Cost
-
-        revenues.loc[:, idx['total', 'load', 'wholesale']] = (
-            who
-            .statistics
-            .revenue(
-                aggregate_time=False,
-                comps='Load'
-                )
-            .loc['electricity']
+        # Total Load Cost
+        revenues.loc[:, idx["total", "load", "wholesale"]] = (
+            who.statistics.revenue(aggregate_time=False, comps="Load")
+            .loc["electricity"]
             .mul(0.5)
         )
 
-        # groups assets into north and south, dispatchable and non-dispatchable groups
-        # revenue is assigned to groups
+        # Group assets into north and south, and by technology.
         wind_north, wind_south = make_north_south_split(
-            bal,
-            'wind',
-            'generators',
-            )
-
+            bal, "wind", "generators"
+        )
         disp_north, disp_south = make_north_south_split(
-            bal,
-            ['fossil', 'biomass', 'coal'],
-            'generators',
-            )
-
-        water_north, water_south = make_north_south_split(
-            nodal_network,
-            ['cascade', 'hydro', 'PHS'],
-            'storage_units',
-            )
-
-        # difference between wholesale and balancing model
-        diff = pd.concat((
-            bal.generators_t.p - who.generators_t.p,
-        ), axis=1)
-
-        ####              REVENUE OF SOUTHERN WIND GENERATORS
-
-        # balancing offers of southern wind generators can be overestimated by
-        # the model, we therefore ensure that excessive offers are 
-        # reintepreted as offers contributed by dispatchable generators
-
-        south_wind_offers = diff.loc[:, wind_south].sum(axis=1)
-        south_wind_offers_total = south_wind_offers.sum()
-        south_wind_offers_total_actual = (
-            actual_offers
-            .loc[idx[wind_south.intersection(actual_offers.index), 'vol']]
-            .sum()
+            bal, ["fossil", "biomass", "coal"], "generators"
+        )
+        # Split storage assets into one-way (hydro) and two-way (storage)
+        hydro_north, hydro_south = make_north_south_split(
+            nodal_network, ["cascade", "hydro"], "storage_units"
+        )
+        storage_north, storage_south = make_north_south_split(
+            nodal_network, ["PHS", "battery"], "storage_units"
         )
 
-        south_disp_offers = diff.loc[
-            :, actual_offers.index.intersection(wind_south)
-        ].sum(axis=1)
+        diff = pd.concat((bal.generators_t.p - who.generators_t.p,), axis=1)
 
-        if south_wind_offers_total > south_wind_offers_total_actual:
-
-            keep_share = south_wind_offers_total_actual / south_wind_offers_total
-            transfer_share = 1. - keep_share
-
+        # Revenue of southern wind generators
+        south_wind_offers = diff.loc[:, wind_south].sum(axis=1)
+        south_wind_offers_total = float(south_wind_offers.sum())
+        south_wind_offers_total_actual = float(
+            actual_offers.loc[idx[wind_south.intersection(actual_offers.index), "vol"]].sum()
+        )
+        if south_wind_offers_total:
+            if south_wind_offers_total > south_wind_offers_total_actual:
+                keep_share = south_wind_offers_total_actual / south_wind_offers_total
+                transfer_share = 1.0 - keep_share
+            else:
+                keep_share = (
+                    south_wind_offers_total_actual / south_wind_offers_total
+                    if south_wind_offers_total != 0
+                    else 1.0
+                )
+                transfer_share = 0.0
         else:
-
-            keep_share = south_wind_offers_total_actual / south_wind_offers_total
-            transfer_share = 0.
+            keep_share = 1.0
+            transfer_share = 0.0
 
         south_wind_transfer = south_wind_offers * transfer_share
         south_wind_offers *= keep_share
@@ -325,488 +336,347 @@ if __name__ == '__main__':
             south_wind_offers_price = get_weighted_avg_price(
                 actual_offers.loc[wind_south.intersection(actual_offers.index)]
             )
-            revenues.loc[:, idx['south', 'wind', 'offers']] = (
-                south_wind_offers_price
-                * south_wind_offers
-                / 2
+            revenues.loc[:, idx["south", "wind", "offers"]] = (
+                south_wind_offers_price * south_wind_offers / 2
             )
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error computing south wind offers price: {e}")
 
         wind_south_dispatch = bal.generators_t.p.loc[
-            :,
-            wind_south.intersection(roc_values.index)
-            ]
-
+            :, wind_south.intersection(roc_values.index)
+        ]
         wind_south_roc_revenue = wind_south_dispatch.multiply(
             roc_values.loc[wind_south_dispatch.columns] / 2
         )
-
-        revenues.loc[:, idx['south', 'wind', 'roc']] = wind_south_roc_revenue.sum(axis=1)
-
+        revenues.loc[:, idx["south", "wind", "roc"]] = wind_south_roc_revenue.sum(
+            axis=1
+        )
         cfd = get_cfd_revenue(bal, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_south.intersection(cfd.columns)]
-        revenues.loc[:, idx['south', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(np.float64)
-
-        revenues.loc[:, idx['south', 'wind', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'generators',
-                wind_south)
-            .sum(axis=1)
+        revenues.loc[:, idx["south", "wind", "cfd"]] = cfd_revenue.sum(
+            axis=1
+        ).astype(np.float64)
+        revenues.loc[:, idx["south", "wind", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", wind_south).sum(axis=1)
         )
 
-        ####              REVENUE OF NORTHERN WIND GENERATORS
-
-        revenues.loc[:, idx['north', 'wind', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'generators',
-                wind_north)
-            .sum(axis=1)
+        # Revenue of northern wind generators
+        revenues.loc[:, idx["north", "wind", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", wind_north).sum(axis=1)
         )
-
-        logger.warning('Open question: Should CFD payments should be considered in the wholesale or balancing model?')
+        logger.warning(
+            "Open question: Should CFD payments be considered in the wholesale or balancing model?"
+        )
         cfd = get_cfd_revenue(who, cfd_strike_prices)
         cfd_revenue = cfd.loc[:, wind_north.intersection(cfd.columns)]
-
-        revenues.loc[:, idx['north', 'wind', 'cfd']] = cfd_revenue.sum(axis=1).astype(np.float64)
-
+        revenues.loc[:, idx["north", "wind", "cfd"]] = cfd_revenue.sum(
+            axis=1
+        ).astype(np.float64)
         wind_north_dispatch = bal.generators_t.p.loc[
-            :,
-            wind_north.intersection(roc_values.index)
-            ]
-
+            :, wind_north.intersection(roc_values.index)
+        ]
         wind_north_roc_revenue = wind_north_dispatch.multiply(
             roc_values.loc[wind_north_dispatch.columns] / 2
         )
-
-        revenues.loc[:, idx['north', 'wind', 'roc']] = wind_north_roc_revenue.sum(axis=1)
-
-        north_wind_bids = (
-            diff
-            .loc[:, wind_north]
-            .sum(axis=1)
-            .clip(upper=0)
-            .abs()
+        revenues.loc[:, idx["north", "wind", "roc"]] = wind_north_roc_revenue.sum(
+            axis=1
         )
-
+        north_wind_bids = (
+            diff.loc[:, wind_north].sum(axis=1).clip(upper=0).abs()
+        )
         if north_wind_bids.sum() > 0:
-
-            actual_north_wind_bid_vol = actual_bids.loc[actual_bids.index.intersection(wind_north), 'vol']
-
+            actual_north_wind_bid_vol = actual_bids.loc[
+                actual_bids.index.intersection(wind_north), "vol"
+            ]
             if actual_north_wind_bid_vol.sum() > 0:
                 north_wind_bid_price = get_weighted_avg_price(
                     actual_bids.loc[actual_bids.index.intersection(wind_north), :]
                 )
-
             else:
-                north_wind_bid_price = default_balancing_prices.loc['wind', 'bids']
-            
-            revenues.loc[:, idx['north', 'wind', 'bids']] = (
-                north_wind_bids
-                * north_wind_bid_price
-                / 2
+                north_wind_bid_price = default_balancing_prices.loc["wind", "bids"]
+            revenues.loc[:, idx["north", "wind", "bids"]] = (
+                north_wind_bids * north_wind_bid_price / 2
             )
-
         north_wind_offers = (
-            diff
-            .loc[:, wind_north]
-            .sum(axis=1)
-            .clip(lower=0)
+            diff.loc[:, wind_north].sum(axis=1).clip(lower=0)
         )
-
         if north_wind_offers.sum() > 0:
-
             actual_north_wind_offer_vol = actual_offers.loc[
-                actual_offers.index.intersection(wind_north), 'vol'
-                ]
-            
+                actual_offers.index.intersection(wind_north), "vol"
+            ]
             if actual_north_wind_offer_vol.sum() > 0:
                 north_wind_offer_price = get_weighted_avg_price(
                     actual_offers.loc[actual_offers.index.intersection(wind_north), :]
                 )
-
             else:
-                north_wind_offer_price = default_balancing_prices.loc['wind', 'offers']
-                safe_value = 150.
-                
+                north_wind_offer_price = default_balancing_prices.loc["wind", "offers"]
+                safe_value = 150.0
                 if north_wind_offer_price > safe_value:
-                    logger.warning('crudely correcting for excessive offer price.')
-
+                    logger.warning(
+                        "Crudely correcting for excessive offer price."
+                    )
                 north_wind_offer_price = min(north_wind_offer_price, safe_value)
-
-            revenues.loc[:, idx['north', 'wind', 'offers']] = (
-                north_wind_offers
-                * north_wind_offer_price
-                / 2
+            revenues.loc[:, idx["north", "wind", "offers"]] = (
+                north_wind_offers * north_wind_offer_price / 2
             )
 
-
-        ####              REVENUE OF DISPATCHABLE GENERATORS
-
-        disp_offers_actual = (
-            actual_offers
-            .loc[disp_south.union(disp_north).intersection(actual_offers.index)]
-            )
-
+        # Revenue of dispatchable generators
+        disp_offers_actual = actual_offers.loc[
+            disp_south.union(disp_north).intersection(actual_offers.index)
+        ]
         if not disp_offers_actual.empty:
             disp_offers_price = get_weighted_avg_price(disp_offers_actual)
         else:
-            disp_offers_price = default_balancing_prices.loc['disp', 'offers']
+            disp_offers_price = default_balancing_prices.loc["disp", "offers"]
 
-        south_disp_offers = (
-            diff.loc[
-                # :, actual_offers.index.intersection(wind_south)
-                :, disp_south
-            ]
-            .sum(axis=1)
-            .clip(lower=0.)
-        )
-
-        assert (
-            (south_wind_transfer >= 0).all(),
-            'Negative transfer of wind offers to dispatchable generators'
-        )
-
+        south_disp_offers = diff.loc[:, disp_south].sum(axis=1).clip(lower=0.0)
         south_disp_offers += south_wind_transfer
-
-        revenues.loc[:, idx['south', 'disp', 'offers']] = (
+        revenues.loc[:, idx["south", "disp", "offers"]] = (
             south_disp_offers * disp_offers_price / 2
         )
-
-        disp_bids_actual = (
-            actual_bids
-            .loc[disp_south.union(disp_north).intersection(actual_bids.index)]
-            )
-
+        disp_bids_actual = actual_bids.loc[
+            disp_south.union(disp_north).intersection(actual_bids.index)
+        ]
         if not disp_bids_actual.empty:
             disp_bids_price = get_weighted_avg_price(disp_bids_actual)
         else:
-            disp_bids_price = default_balancing_prices.loc['disp', 'bids']
-
-        south_disp_bids = (
-            diff.loc[
-                # :, actual_bids.index.intersection(wind_south)
-                :, disp_south
-            ]
-            .sum(axis=1)
-            .clip(upper=0.)
-            .abs()
-        )
-
-        revenues.loc[:, idx['south', 'disp', 'bids']] = (
+            disp_bids_price = default_balancing_prices.loc["disp", "bids"]
+        south_disp_bids = diff.loc[:, disp_south].sum(axis=1).clip(upper=0.0).abs()
+        revenues.loc[:, idx["south", "disp", "bids"]] = (
             south_disp_bids * disp_bids_price / 2
         )
-
-        north_disp_offers = (
-            diff.loc[:, disp_north]
-            .sum(axis=1)
-            .clip(lower=0.)
-        )
-
-        north_disp_bids = (
-            diff.loc[:, disp_north]
-            .sum(axis=1)
-            .clip(upper=0.)
-            .abs()
-        )
-
-        revenues.loc[:, idx['north', 'disp', 'offers']] = (
+        north_disp_offers = diff.loc[:, disp_north].sum(axis=1).clip(lower=0.0)
+        north_disp_bids = diff.loc[:, disp_north].sum(axis=1).clip(upper=0.0).abs()
+        revenues.loc[:, idx["north", "disp", "offers"]] = (
             north_disp_offers * disp_offers_price / 2
         )
-
-        revenues.loc[:, idx['north', 'disp', 'bids']] = (
+        revenues.loc[:, idx["north", "disp", "bids"]] = (
             north_disp_bids * disp_bids_price / 2
         )
-
-        revenues.loc[:, idx['south', 'disp', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'generators',
-                disp_south)
-            .sum(axis=1)
+        revenues.loc[:, idx["south", "disp", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", disp_south).sum(axis=1)
+        )
+        revenues.loc[:, idx["north", "disp", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", disp_north).sum(axis=1)
         )
 
-        revenues.loc[:, idx['north', 'disp', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'generators',
-                disp_north)
-            .sum(axis=1)
+        # Revenue of storage assets
+        # ONE-WAY ASSETS ("hydro"): run-of-river / generation-only.
+        revenues.loc[:, idx["south", "hydro", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "storage_units", hydro_south).sum(axis=1)
+        )
+        revenues.loc[:, idx["north", "hydro", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "storage_units", hydro_north).sum(axis=1)
+        )
+        if layout != "nodal":
+            logger.warning("Logic of storage balancing volumes could warrant more thinking")
+            bid_reduction_factor = 1.0
+            offer_reduction_factor = 1.0
+            revenues.loc[:, idx["north", "hydro", "bids"]] = (
+                get_storage_balancing_revenue(who, hydro_north, "bids", actual_bids)
+                .mul(bid_reduction_factor)
+            )
+            revenues.loc[:, idx["north", "hydro", "offers"]] = (
+                get_storage_balancing_revenue(who, hydro_north, "offers", actual_offers)
+                .mul(offer_reduction_factor)
+            )
+            revenues.loc[:, idx["south", "hydro", "bids"]] = (
+                get_storage_balancing_revenue(who, hydro_south, "bids", actual_bids)
+                .mul(bid_reduction_factor)
+            )
+            revenues.loc[:, idx["south", "hydro", "offers"]] = (
+                get_storage_balancing_revenue(who, hydro_south, "offers", actual_offers)
+                .mul(offer_reduction_factor)
+            )
+        revenues.loc[:, idx["south", "hydro", "roc"]] = get_storage_roc_revenue(
+            who, actual_bids, actual_offers, hydro_south, roc_values
+        )
+        revenues.loc[:, idx["north", "hydro", "roc"]] = get_storage_roc_revenue(
+            who, actual_bids, actual_offers, hydro_north, roc_values
         )
 
-
-        def get_water_balancing_revenue(who, units, mode, actual_trades):
-            '''
-            who: wholesale model
-            units: units to consider
-            mode: 'offers' or 'bids'
-            '''
-
-            logger.warning((
-                'Implementation of hydropower revenue assumes that hydro '
-                'wholesale trading cant be reversed in the balancing market.'
-                ))
-
-            assert mode in ['offers', 'bids'], 'mode must be either offers or bids'
-
-            actual = actual_trades.loc[actual_trades.index.intersection(units)]
-
-            total_actual_volume = actual['vol'].sum()
-
-            if total_actual_volume == 0:
-                return pd.Series(0., index=who.snapshots)
-            
-            actual_revenue = (actual['price'] * actual['vol']).sum()
-
-            if mode == 'offers':
-                kwargs = {'lower': 0.}
-            else:
-                kwargs = {'upper': 0.}
-
-            trading_profile = who.storage_units_t.p[units].sum(axis=1).clip(**kwargs).abs()
-
-            if trading_profile.sum() == 0:
-                return pd.Series(actual_revenue / len(who.snapshots), index=who.snapshots)
-            
-            trading_profile = trading_profile.div(trading_profile.sum())
-
-            return (
-                trading_profile
-                .multiply(actual_revenue)
+        # TWO-WAY ASSETS ("storage"): PHS and battery.
+        revenues.loc[:, idx["south", "storage", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "storage_units", storage_south).sum(axis=1)
+        )
+        revenues.loc[:, idx["north", "storage", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "storage_units", storage_north).sum(axis=1)
+        )
+        if layout != "nodal":
+            revenues.loc[:, idx["north", "storage", "bids"]] = (
+                get_storage_balancing_revenue(who, storage_north, "bids", actual_bids)
+                .mul(bid_reduction_factor)
             )
-
-        revenues.loc[:, idx['south', 'water', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'storage_units',
-                water_south)
-            .sum(axis=1)
+            revenues.loc[:, idx["north", "storage", "offers"]] = (
+                get_storage_balancing_revenue(who, storage_north, "offers", actual_offers)
+                .mul(offer_reduction_factor)
+            )
+            revenues.loc[:, idx["south", "storage", "bids"]] = (
+                get_storage_balancing_revenue(who, storage_south, "bids", actual_bids)
+                .mul(bid_reduction_factor)
+            )
+            revenues.loc[:, idx["south", "storage", "offers"]] = (
+                get_storage_balancing_revenue(who, storage_south, "offers", actual_offers)
+                .mul(offer_reduction_factor)
+            )
+        revenues.loc[:, idx["south", "storage", "roc"]] = get_storage_roc_revenue(
+            who, actual_bids, actual_offers, storage_south, roc_values
+        )
+        revenues.loc[:, idx["north", "storage", "roc"]] = get_storage_roc_revenue(
+            who, actual_bids, actual_offers, storage_north, roc_values
         )
 
-        revenues.loc[:, idx['north', 'water', 'wholesale']] = (
-            get_unit_wholesale_revenue(
-                who,
-                'storage_units',
-                water_north)
-            .sum(axis=1)
-        )
-
-
-        if not layout == 'nodal':
-
-            logger.warning('Logic of water balancing volumes could warrant more thinking')
-
-            # bid_reduction_factor = (
-            #     total_balancing_volumes[layout]['bids'] /
-            #     total_balancing_volumes['national']['bids'],
-            # )
-            bid_reduction_factor = 1.
-
-            # offer_reduction_factor = (
-            #     total_balancing_volumes[layout]['offers'] /
-            #     total_balancing_volumes['national']['offers']
-            # )
-            offer_reduction_factor = 1.
-
-            revenues.loc[:, idx['north', 'water', 'bids']] = (
-                get_water_balancing_revenue(
-                    who,
-                    water_north,
-                    'bids',
-                    actual_bids)
-                    .mul(bid_reduction_factor)
-            )
-
-            revenues.loc[:, idx['north', 'water', 'offers']] = (
-                get_water_balancing_revenue(
-                    who,
-                    water_north,
-                    'offers',
-                    actual_offers)
-                    .mul(offer_reduction_factor)
-            )
-
-            revenues.loc[:, idx['south', 'water', 'bids']] = (
-                get_water_balancing_revenue(
-                    who,
-                    water_south,
-                    'bids',
-                    actual_bids)
-                    .mul(bid_reduction_factor)
-            )
-
-            revenues.loc[:, idx['south', 'water', 'offers']] = (
-                get_water_balancing_revenue(
-                    who,
-                    water_south,
-                    'offers',
-                    actual_offers)
-                    .mul(offer_reduction_factor)
-            )
-
-        def get_water_roc_revenue(
-                n,
-                actual_bids,
-                actual_offers,
-                units,
-                roc_values
-                ):
-            '''
-            n: network
-            actual_bids: actual accepted bids of that day
-            actual_offers: actual accepted offers of that day
-            units: units to consider
-            roc_values: ROC values
-            '''
-
-            units = units.copy().intersection(roc_values.index)
-
-            if units.empty:
-                return pd.Series(0., index=n.snapshots)
-
-            bid_volume = actual_bids.loc[units.intersection(actual_bids.index)].vol.sum()
-            offer_volume = actual_offers.loc[units.intersection(actual_offers.index)].vol.sum()
-
-            units_dispatch = n.storage_units_t.p[units].clip(lower=0.)
-
-            total_dispatch = units_dispatch.sum().sum() * 0.5
-
-            units_dispatch *= (
-                (total_dispatch + offer_volume - bid_volume) / total_dispatch
-                )
-            
-            return units_dispatch.multiply(
-                roc_values.loc[units_dispatch.columns] / 2
-                ).sum(axis=1)
-
-        revenues.loc[:, idx['south', 'water', 'roc']] = (
-            get_water_roc_revenue(
-                who,
-                actual_bids,
-                actual_offers,
-                water_south,
-                roc_values
-                )
-        )
-
-        revenues.to_csv(snakemake.output[f'bmu_revenues_{layout}'])
+        revenues.to_csv(snakemake.output[f"bmu_revenues_{layout}"])
 
         # --- Track Dispatch
-        #
-        # Create a dataframe with the same multi-index columns as revenues.
         dispatch = pd.DataFrame(
-            0.,
-            index=who.snapshots,
-            columns=revenues.columns
+            0.0, index=who.snapshots, columns=revenues.columns
         )
 
         # WIND:
-        # Wholesale: use the wholesale model generator dispatch.
-        dispatch.loc[:, idx['south', 'wind', 'wholesale']] = who.generators_t.p.loc[:, wind_south].sum(axis=1)
-        dispatch.loc[:, idx['north', 'wind', 'wholesale']] = who.generators_t.p.loc[:, wind_north].sum(axis=1)
-
-        # Balancing offers / bids:
-        # For south wind, we already adjusted offers (and transferred some to disp).
-        dispatch.loc[:, idx['south', 'wind', 'offers']] = south_wind_offers
-        dispatch.loc[:, idx['south', 'wind', 'bids']] = diff.loc[:, wind_south].sum(axis=1).clip(upper=0)
-        dispatch.loc[:, idx['north', 'wind', 'offers']] = diff.loc[:, wind_north].sum(axis=1).clip(lower=0)
-        dispatch.loc[:, idx['north', 'wind', 'bids']] = diff.loc[:, wind_north].sum(axis=1).clip(upper=0)
-
-        # CFD: use the dispatch of plants for which CFD strike prices exist.
+        dispatch.loc[:, idx["south", "wind", "wholesale"]] = who.generators_t.p.loc[
+            :, wind_south
+        ].sum(axis=1)
+        dispatch.loc[:, idx["north", "wind", "wholesale"]] = who.generators_t.p.loc[
+            :, wind_north
+        ].sum(axis=1)
+        dispatch.loc[:, idx["south", "wind", "offers"]] = south_wind_offers
+        dispatch.loc[:, idx["south", "wind", "bids"]] = diff.loc[:, wind_south].sum(
+            axis=1
+        ).clip(upper=0)
+        dispatch.loc[:, idx["north", "wind", "offers"]] = diff.loc[:, wind_north].sum(
+            axis=1
+        ).clip(lower=0)
+        dispatch.loc[:, idx["north", "wind", "bids"]] = diff.loc[:, wind_north].sum(
+            axis=1
+        ).clip(upper=0)
         csouth = wind_south.intersection(cfd_strike_prices.index)
         cnorth = wind_north.intersection(cfd_strike_prices.index)
         if not csouth.empty:
-            dispatch.loc[:, idx['south', 'wind', 'cfd']] = bal.generators_t.p.loc[:, csouth].sum(axis=1)
+            dispatch.loc[:, idx["south", "wind", "cfd"]] = bal.generators_t.p.loc[
+                :, csouth
+            ].sum(axis=1)
         else:
-            dispatch.loc[:, idx['south', 'wind', 'cfd']] = 0.
+            dispatch.loc[:, idx["south", "wind", "cfd"]] = 0.0
         if not cnorth.empty:
-            dispatch.loc[:, idx['north', 'wind', 'cfd']] = who.generators_t.p.loc[:, cnorth].sum(axis=1)
+            dispatch.loc[:, idx["north", "wind", "cfd"]] = who.generators_t.p.loc[
+                :, cnorth
+            ].sum(axis=1)
         else:
-            dispatch.loc[:, idx['north', 'wind', 'cfd']] = 0.
-
-        # ROC: use the balancing model’s dispatch for those units with ROC values.
+            dispatch.loc[:, idx["north", "wind", "cfd"]] = 0.0
         rnorth = wind_north.intersection(roc_values.index)
         rsouth = wind_south.intersection(roc_values.index)
         if not rsouth.empty:
-            dispatch.loc[:, idx['south', 'wind', 'roc']] = bal.generators_t.p.loc[:, rsouth].sum(axis=1)
+            dispatch.loc[:, idx["south", "wind", "roc"]] = bal.generators_t.p.loc[
+                :, rsouth
+            ].sum(axis=1)
         else:
-            dispatch.loc[:, idx['south', 'wind', 'roc']] = 0.
+            dispatch.loc[:, idx["south", "wind", "roc"]] = 0.0
         if not rnorth.empty:
-            dispatch.loc[:, idx['north', 'wind', 'roc']] = bal.generators_t.p.loc[:, rnorth].sum(axis=1)
+            dispatch.loc[:, idx["north", "wind", "roc"]] = bal.generators_t.p.loc[
+                :, rnorth
+            ].sum(axis=1)
         else:
-            dispatch.loc[:, idx['north', 'wind', 'roc']] = 0.
+            dispatch.loc[:, idx["north", "wind", "roc"]] = 0.0
 
         # DISPATCHABLE (disp):
-        dispatch.loc[:, idx['south', 'disp', 'wholesale']] = who.generators_t.p.loc[:, disp_south].sum(axis=1)
-        dispatch.loc[:, idx['north', 'disp', 'wholesale']] = who.generators_t.p.loc[:, disp_north].sum(axis=1)
+        dispatch.loc[:, idx["south", "disp", "wholesale"]] = who.generators_t.p.loc[
+            :, disp_south
+        ].sum(axis=1)
+        dispatch.loc[:, idx["north", "disp", "wholesale"]] = who.generators_t.p.loc[
+            :, disp_north
+        ].sum(axis=1)
+        dispatch.loc[:, idx["south", "disp", "offers"]] = (
+            diff.loc[:, disp_south].sum(axis=1).clip(lower=0) + south_wind_transfer
+        )
+        dispatch.loc[:, idx["north", "disp", "offers"]] = diff.loc[:, disp_north].sum(
+            axis=1
+        ).clip(lower=0)
+        dispatch.loc[:, idx["south", "disp", "bids"]] = diff.loc[:, disp_south].sum(
+            axis=1
+        ).clip(upper=0)
+        dispatch.loc[:, idx["north", "disp", "bids"]] = diff.loc[:, disp_north].sum(
+            axis=1
+        ).clip(upper=0)
 
-        dispatch.loc[:, idx['south', 'disp', 'offers']] = diff.loc[:, disp_south].sum(axis=1).clip(lower=0) + south_wind_transfer
-        dispatch.loc[:, idx['north', 'disp', 'offers']] = diff.loc[:, disp_north].sum(axis=1).clip(lower=0)
+        # STORAGE ASSETS:
+        # ONE-WAY ("hydro")
+        dispatch.loc[:, idx["south", "hydro", "wholesale"]] = who.storage_units_t.p.loc[
+            :, hydro_south
+        ].sum(axis=1)
+        dispatch.loc[:, idx["north", "hydro", "wholesale"]] = who.storage_units_t.p.loc[
+            :, hydro_north
+        ].sum(axis=1)
+        dispatch.loc[:, idx["south", "hydro", "offers"]] = who.storage_units_t.p.loc[
+            :, hydro_south
+        ].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx["south", "hydro", "bids"]] = who.storage_units_t.p.loc[
+            :, hydro_south
+        ].sum(axis=1).clip(upper=0)
+        dispatch.loc[:, idx["north", "hydro", "offers"]] = who.storage_units_t.p.loc[
+            :, hydro_north
+        ].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx["north", "hydro", "bids"]] = who.storage_units_t.p.loc[
+            :, hydro_north
+        ].sum(axis=1).clip(upper=0)
 
-        dispatch.loc[:, idx['south', 'disp', 'bids']] = diff.loc[:, disp_south].sum(axis=1).clip(upper=0)
-        dispatch.loc[:, idx['north', 'disp', 'bids']] = diff.loc[:, disp_north].sum(axis=1).clip(upper=0)
+        # TWO-WAY ("storage")
+        dispatch.loc[:, idx["south", "storage", "wholesale"]] = who.storage_units_t.p.loc[
+            :, storage_south
+        ].sum(axis=1)
+        dispatch.loc[:, idx["north", "storage", "wholesale"]] = who.storage_units_t.p.loc[
+            :, storage_north
+        ].sum(axis=1)
+        dispatch.loc[:, idx["south", "storage", "offers"]] = who.storage_units_t.p.loc[
+            :, storage_south
+        ].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx["south", "storage", "bids"]] = who.storage_units_t.p.loc[
+            :, storage_south
+        ].sum(axis=1).clip(upper=0)
+        dispatch.loc[:, idx["north", "storage", "offers"]] = who.storage_units_t.p.loc[
+            :, storage_north
+        ].sum(axis=1).clip(lower=0)
+        dispatch.loc[:, idx["north", "storage", "bids"]] = who.storage_units_t.p.loc[
+            :, storage_north
+        ].sum(axis=1).clip(upper=0)
 
-        # WATER:
-        dispatch.loc[:, idx['south', 'water', 'wholesale']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1)
-        dispatch.loc[:, idx['north', 'water', 'wholesale']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1)
-
-        dispatch.loc[:, idx['south', 'water', 'offers']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1).clip(lower=0)
-        dispatch.loc[:, idx['south', 'water', 'bids']] = who.storage_units_t.p.loc[:, water_south].sum(axis=1).clip(upper=0)
-        dispatch.loc[:, idx['north', 'water', 'offers']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1).clip(lower=0)
-        dispatch.loc[:, idx['north', 'water', 'bids']] = who.storage_units_t.p.loc[:, water_north].sum(axis=1).clip(upper=0)
-
-        # For water ROC, mimic the scaling in get_water_roc_revenue but report the scaled dispatch.
-        def compute_water_roc_dispatch(network, units, actual_bids, actual_offers):
-            units = units.intersection(network.storage_units.index)
-
-            if units.empty:
-                return pd.Series(0., index=network.snapshots)
-
-            units_dispatch = network.storage_units_t.p.loc[:, units].clip(lower=0)
-            total_dispatch = units_dispatch.sum().sum() * 0.5
-
-            if total_dispatch == 0:
-                return pd.Series(0., index=network.snapshots)
-
-            bid_volume = actual_bids.loc[units.intersection(actual_bids.index), 'vol'].sum() if not actual_bids.empty else 0.
-            offer_volume = actual_offers.loc[units.intersection(actual_offers.index), 'vol'].sum() if not actual_offers.empty else 0.
-
-            scale_factor = (total_dispatch + offer_volume - bid_volume) / total_dispatch
-            scaled_dispatch = units_dispatch * scale_factor
-
-            return scaled_dispatch.sum(axis=1)
-
-        dispatch.loc[:, idx['south', 'water', 'roc']] = compute_water_roc_dispatch(who, water_south, actual_bids, actual_offers)
-        dispatch.loc[:, idx['north', 'water', 'roc']] = compute_water_roc_dispatch(who, water_north, actual_bids, actual_offers)
+        dispatch.loc[:, idx["south", "hydro", "roc"]] = compute_storage_roc_dispatch(
+            who, hydro_south, actual_bids, actual_offers
+        )
+        dispatch.loc[:, idx["north", "hydro", "roc"]] = compute_storage_roc_dispatch(
+            who, hydro_north, actual_bids, actual_offers
+        )
+        dispatch.loc[:, idx["south", "storage", "roc"]] = compute_storage_roc_dispatch(
+            who, storage_south, actual_bids, actual_offers
+        )
+        dispatch.loc[:, idx["north", "storage", "roc"]] = compute_storage_roc_dispatch(
+            who, storage_north, actual_bids, actual_offers
+        )
 
         # TOTAL INTERCONNECTOR & LOAD:
-        intercon_links = who.links.index[who.links.carrier == 'interconnector']
-
+        intercon_links = who.links.index[who.links.carrier == "interconnector"]
         p0_links = who.links_t.p0.loc[:, intercon_links]
         p1_links = who.links_t.p1.loc[:, intercon_links]
-
-        dispatch.loc[:, idx['total', 'intercon', 'wholesale selling']] = (
-            p0_links.clip(lower=0).sum(axis=1).add(
-                p1_links.clip(lower=0).sum(axis=1),
-                axis=0
-            )
+        dispatch.loc[:, idx["total", "intercon", "wholesale selling"]] = (
+            p0_links.clip(lower=0)
+            .sum(axis=1)
+            .add(p1_links.clip(lower=0).sum(axis=1), axis=0)
             .multiply(0.5)
         )
-
-        dispatch.loc[:, idx['total', 'intercon', 'wholesale buying']] = (
-            p0_links.clip(upper=0).sum(axis=1).add(
-                p1_links.clip(upper=0).sum(axis=1),
-                axis=0
-            )
+        dispatch.loc[:, idx["total", "intercon", "wholesale buying"]] = (
+            p0_links.clip(upper=0)
+            .sum(axis=1)
+            .add(p1_links.clip(upper=0).sum(axis=1), axis=0)
             .multiply(0.5)
         )
-
-        if 'carrier' in who.loads.columns:
-            load_units = who.loads.index[who.loads.carrier=='electricity']
-            dispatch.loc[:, idx['total', 'load', 'wholesale']] = who.loads_t.p.loc[:, load_units].sum(axis=1)
+        if "carrier" in who.loads.columns:
+            load_units = who.loads.index[who.loads.carrier == "electricity"]
+            dispatch.loc[:, idx["total", "load", "wholesale"]] = who.loads_t.p.loc[
+                :, load_units
+            ].sum(axis=1)
         else:
-            dispatch.loc[:, idx['total', 'load', 'wholesale']] = who.loads_t.p.sum(axis=1)
+            dispatch.loc[:, idx["total", "load", "wholesale"]] = who.loads_t.p.sum(
+                axis=1
+            )
 
-        dispatch.to_csv(snakemake.output[f'bmu_dispatch_{layout}'])
+        dispatch.to_csv(snakemake.output[f"bmu_dispatch_{layout}"])
