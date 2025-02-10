@@ -131,7 +131,7 @@ def get_storage_roc_revenue(n, actual_bids, actual_offers, units, roc_values):
     units: the storage units to consider.
     roc_values: ROC values (a Series with unit indices).
     """
-    units = units.copy().intersection(roc_values.index)
+    units = roc_values.index.intersection(units)
     if units.empty:
         return pd.Series(0.0, index=n.snapshots)
     bid_volume = actual_bids.loc[units.intersection(actual_bids.index)].vol.sum()
@@ -153,6 +153,9 @@ def compute_storage_roc_dispatch(network, units, actual_bids, actual_offers):
     actual_bids: actual bids DataFrame.
     actual_offers: actual offers DataFrame.
     """
+    if not isinstance(units, pd.Index):
+        units = pd.Index([units])
+
     units = units.intersection(network.storage_units.index)
     if units.empty:
         return pd.Series(0.0, index=network.snapshots)
@@ -198,12 +201,6 @@ if __name__ == "__main__":
         snakemake.input["default_balancing_prices"], index_col=0
     )
 
-    cfd_strike_prices = pd.read_csv(
-        snakemake.input["cfd_strike_prices"],
-        index_col=0,
-        parse_dates=True,
-    )
-
     roc_values = pd.read_csv(snakemake.input["roc_values"], index_col=0).iloc[:, 0]
 
     nodal_network = pypsa.Network(snakemake.input["network_nodal"])
@@ -227,6 +224,13 @@ if __name__ == "__main__":
         )
 
     for layout in ["national", "zonal", "nodal"]:
+
+        cfd_strike_prices = pd.read_csv(
+            snakemake.input["cfd_strike_prices"],
+            index_col=0,
+            parse_dates=True,
+        )
+
         logger.info(f"Processing revenues for {layout} layout.")
         who = pypsa.Network(snakemake.input[f"network_{layout}"])
         if layout != "nodal":
@@ -680,3 +684,98 @@ if __name__ == "__main__":
             )
 
         dispatch.to_csv(snakemake.output[f"bmu_dispatch_{layout}"])
+
+
+        ### Track revenues of individual assets and keep revenue components (wholesale, CFD, and ROC) separate
+        cfd_strike_prices = pd.read_csv(
+            snakemake.input["cfd_strike_prices"],
+            index_col=0,
+            parse_dates=True,
+        )
+        cfd_strike_prices.columns = pd.to_datetime(cfd_strike_prices.columns)
+        cfd_strike_prices = cfd_strike_prices.loc[:, :who.snapshots[4]].iloc[:,-1]
+
+        revenue_rows = []
+
+        # Process generator revenues: compute base wholesale and additional CFD revenue if applicable.
+
+        for gen, bus in who.generators["bus"].items():
+
+            wholesale = 0.5 * (who.generators_t.p[gen] * who.buses_t.marginal_price[bus]).sum()
+
+            cfd = 0.0
+            if gen in cfd_strike_prices.index:
+                strike_price = cfd_strike_prices.loc[gen]
+
+                price_gap = strike_price - who.buses_t.marginal_price[bus].values
+                cfd = 0.5 * (who.generators_t.p[gen].values * price_gap).sum()
+
+            roc = 0.0
+            if gen in roc_values.index:
+                roc = who.generators_t.p[gen].sum() * 0.5 * roc_values.loc[gen]
+
+            revenue_rows.append({
+                "asset": gen,
+                "asset_type": "generator",
+                "wholesale_revenue": wholesale,
+                "cfd_revenue": cfd,
+                "roc_revenue": roc
+            })
+
+        # Process storage unit revenues: compute base wholesale, additional CFD revenue, and ROC revenue if applicable.
+        for unit, bus in who.storage_units["bus"].items():
+            if 'local_market' in unit:
+                continue
+
+            wholesale = 0.5 * (who.storage_units_t.p[unit] * who.buses_t.marginal_price[bus]).sum()
+
+            cfd = 0.0
+            if unit in cfd_strike_prices.index:
+                strike_price = cfd_strike_prices.loc[unit]
+                price_gap = strike_price - who.buses_t.marginal_price[bus]
+                cfd = 0.5 * (who.storage_units_t.p[unit] * price_gap).sum()
+
+            roc = 0.0
+            if unit in roc_values.index:
+                unit_dispatch = who.storage_units_t.p[unit].clip(lower=0).sum()
+                roc = unit_dispatch * 0.5 * roc_values.loc[unit]
+
+            revenue_rows.append({
+                "asset": unit,
+                "asset_type": "storage",
+                "wholesale_revenue": wholesale,
+                "cfd_revenue": cfd,
+                "roc_revenue": roc
+            })
+
+        # Process interconnector link revenues: these only have the wholesale component.
+        intercon_links = who.links.index[who.links.carrier == "interconnector"]
+    
+        for link in intercon_links:
+            bus0 = who.links.at[link, "bus0"]
+            bus1 = who.links.at[link, "bus1"]
+            price_bus0 = who.buses_t.marginal_price[bus0]
+            price_bus1 = who.buses_t.marginal_price[bus1]
+            # wholesale = 0.5 * ((who.links_t.p0[link] * price_bus0 + who.links_t.p1[link] * price_bus1).sum())
+            wholesale = (
+                0.5
+                * (who.links_t.p0[link].abs() * (price_bus0 - price_bus1).abs())
+                .sum()
+            )
+            revenue_rows.append({
+                "asset": link,
+                "asset_type": "interconnector",
+                "wholesale_revenue": wholesale,
+                "cfd_revenue": 0.0,
+                "roc_revenue": 0.0
+            })
+
+        detailed_wholesale_revenue = pd.DataFrame(revenue_rows).set_index("asset")
+
+        logger.info("Disaggregated daily revenue by component (wholesale, CFD, ROC):")
+
+        for asset_type in detailed_wholesale_revenue["asset_type"].unique():
+            logger.info(f"Asset type: {asset_type}")
+            logger.info(detailed_wholesale_revenue[detailed_wholesale_revenue["asset_type"] == asset_type])
+
+        detailed_wholesale_revenue.to_csv(snakemake.output[f"bmu_revenues_detailed_{layout}"])
