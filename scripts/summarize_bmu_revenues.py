@@ -700,6 +700,8 @@ if __name__ == "__main__":
         # Process generator revenues: compute base wholesale and additional CFD revenue if applicable.
 
         for gen, bus in who.generators["bus"].items():
+            if 'local_market' in gen:
+                continue
 
             wholesale = 0.5 * (who.generators_t.p[gen] * who.buses_t.marginal_price[bus]).sum()
 
@@ -724,9 +726,6 @@ if __name__ == "__main__":
 
         # Process storage unit revenues: compute base wholesale, additional CFD revenue, and ROC revenue if applicable.
         for unit, bus in who.storage_units["bus"].items():
-            if 'local_market' in unit:
-                continue
-
             wholesale = 0.5 * (who.storage_units_t.p[unit] * who.buses_t.marginal_price[bus]).sum()
 
             cfd = 0.0
