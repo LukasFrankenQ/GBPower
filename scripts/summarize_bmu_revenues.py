@@ -772,10 +772,7 @@ if __name__ == "__main__":
 
         detailed_wholesale_revenue = pd.DataFrame(revenue_rows).set_index("asset")
 
-        logger.info("Disaggregated daily revenue by component (wholesale, CFD, ROC):")
-
-        for asset_type in detailed_wholesale_revenue["asset_type"].unique():
-            logger.info(f"Asset type: {asset_type}")
-            logger.info(detailed_wholesale_revenue[detailed_wholesale_revenue["asset_type"] == asset_type])
-
         detailed_wholesale_revenue.to_csv(snakemake.output[f"bmu_revenues_detailed_{layout}"])
+
+    l = who.loads.index[who.loads.carrier == 'electricity']
+    who.loads_t.p_set.loc[:, l].sum(axis=1).to_csv(snakemake.output[f"gb_total_load"])

@@ -28,6 +28,7 @@ rule summarize_bmu_revenues:
         bmu_revenues_detailed_national="results/{day}/bmu_revenues_detailed_{ic}_national.csv",
         bmu_revenues_detailed_nodal="results/{day}/bmu_revenues_detailed_{ic}_nodal.csv",
         bmu_revenues_detailed_zonal="results/{day}/bmu_revenues_detailed_{ic}_zonal.csv",
+        gb_total_load="results/{day}/gb_total_load_{ic}.csv",
     resources:
         mem_mb=1500,
     log:
