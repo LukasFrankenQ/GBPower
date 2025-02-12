@@ -27,12 +27,28 @@ carrier_colors = {
     "hydro": "#0079c1",
     "biomass": "#dbc263",
     "fossil": "#f6986b",
-    "nuclear": '#549ca2',
+    "nuclear": 'orange',
     "imports": "#dd75b0",
     "cascade": "#0079c1",
     "PHS": "#46caf0",
     "solar": "#f9d002",
-    "battery": '#ace37f',
+    "battery": "darkred",
+    "interconnector": "magenta",
+}
+
+nice_carrier_names = {
+    "onwind": "Onshore Wind",
+    "offwind": "Offshore Wind",
+    "hydro": "Hydro",
+    "biomass": "Biomass",
+    "fossil": "Fossil",
+    "nuclear": "Nuclear",
+    "imports": "Imports",
+    "cascade": "Cascade",
+    "PHS": "Pumped Hydro Storage",
+    "solar": "Solar",
+    "battery": "Battery",
+    "interconnector": "Interconnector",
 }
 
 def stack_to_ax(df, ax, text_y_offset=0.2):
