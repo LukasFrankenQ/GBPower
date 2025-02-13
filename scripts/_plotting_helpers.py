@@ -27,7 +27,7 @@ with open(script_path.parent.parent / 'config.yaml', 'r') as f:
     nice_names = config['nice_names']
 
 
-def plot_merit_order(n, period):
+def plot_merit_order(n, period, fn=None):
     """
     Plots a merit order curve for electricity supply based on the provided dataframe.
 
@@ -130,6 +130,9 @@ def plot_merit_order(n, period):
     ax.spines['right'].set_visible(False)
 
     plt.tight_layout()
+
+    if fn is not None:
+        plt.savefig(fn, bbox_inches='tight')
     plt.show()
 
 
