@@ -50,11 +50,15 @@ def get_cfd_revenue(n, strike_prices):
     cfd_plants = strike_prices.index.intersection(n.generators.index)
     cfd_payments = pd.DataFrame(columns=cfd_plants, index=n.snapshots)
     for plant, strike_price in strike_prices.loc[cfd_plants].items():
-        price_gap = (
-            strike_price
-            - n.buses_t.marginal_price[n.generators.loc[plant, "bus"]]
-        )
-        cfd_payments.loc[:, plant] = n.generators_t.p[plant] * price_gap * 0.5
+        bus = n.generators.loc[plant, "bus"]
+        bus_mp = n.buses_t.marginal_price[bus]
+
+        # Identify snapshots where the marginal price has been negative for the last 6 hours (i.e. 12 consecutive 30-min intervals)
+        negative_streak = bus_mp.rolling(window=12, min_periods=12).max() < 0
+        payment_mask = ~negative_streak.fillna(False)
+        price_gap = strike_price - bus_mp
+        cfd_payments.loc[:, plant] = n.generators_t.p[plant] * price_gap * 0.5 * payment_mask
+
     return cfd_payments
 
 
@@ -708,9 +712,12 @@ if __name__ == "__main__":
             cfd = 0.0
             if gen in cfd_strike_prices.index:
                 strike_price = cfd_strike_prices.loc[gen]
-
-                price_gap = strike_price - who.buses_t.marginal_price[bus].values
-                cfd = 0.5 * (who.generators_t.p[gen].values * price_gap).sum()
+                bus_mp = who.buses_t.marginal_price[bus]
+                # Identify snapshots where the marginal price has been negative for the last 6 hours (i.e. 12 consecutive 30-min intervals)
+                negative_streak = bus_mp.rolling(window=12, min_periods=12).max() < 0
+                payment_mask = ~negative_streak.fillna(False)
+                price_gap = strike_price - bus_mp
+                cfd = 0.5 * (who.generators_t.p[gen] * price_gap * payment_mask).sum()
 
             roc = 0.0
             if gen in roc_values.index:
@@ -731,8 +738,12 @@ if __name__ == "__main__":
             cfd = 0.0
             if unit in cfd_strike_prices.index:
                 strike_price = cfd_strike_prices.loc[unit]
-                price_gap = strike_price - who.buses_t.marginal_price[bus]
-                cfd = 0.5 * (who.storage_units_t.p[unit] * price_gap).sum()
+                bus_mp = who.buses_t.marginal_price[bus]
+                # Identify snapshots where the marginal price has been negative for the last 6 hours (i.e. 12 consecutive 30-min intervals)
+                negative_streak = bus_mp.rolling(window=12, min_periods=12).max() < 0
+                payment_mask = ~negative_streak.fillna(False)
+                price_gap = strike_price - bus_mp
+                cfd = 0.5 * (who.storage_units_t.p[unit] * price_gap * payment_mask).sum()
 
             roc = 0.0
             if unit in roc_values.index:

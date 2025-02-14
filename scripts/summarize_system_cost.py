@@ -102,10 +102,13 @@ def get_cfd_payments(n, strike_prices):
         strike_prices.index.intersection(n.generators.index)
         ].items():
 
-        price_gap = (
-            strike_price - n.buses_t.marginal_price[n.generators.loc[plant, 'bus']]
-        )
-        cfd_payments += n.generators_t.p[plant] * price_gap * 0.5
+        bus = n.generators.loc[plant, 'bus']
+        bus_mp = n.buses_t.marginal_price[bus]
+        # Identify snapshots where the marginal price has been negative for the last 6 hours (i.e. 12 consecutive 30-min steps)
+        negative_streak = bus_mp.rolling(window=12, min_periods=12).max() < 0
+        payment_mask = ~negative_streak.fillna(False)  # True if payment is allowed
+        price_gap = strike_price - bus_mp
+        cfd_payments += n.generators_t.p[plant] * price_gap * 0.5 * payment_mask
 
     return cfd_payments
 
