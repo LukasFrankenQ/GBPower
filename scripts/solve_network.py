@@ -207,6 +207,8 @@ def safe_solve(n):
 
 if __name__ == '__main__':
 
+    logger.warning('Relaxation factors for zonal and nodal should start at national redispatch relaxation factor')
+
     configure_logging(snakemake)
 
     flow_constraints = pd.read_csv(

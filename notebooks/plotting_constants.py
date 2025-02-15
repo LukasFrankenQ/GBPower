@@ -1,5 +1,14 @@
 import numpy as np
 
+#### gif parameters
+
+gif_length = 10 # seconds
+fps = 20
+
+
+##### plotting constants
+
+
 nice_names = {
     'wholesale': 'Wholesale Market',
     'wholesale buying': 'Electricity Procurement',
