@@ -527,31 +527,23 @@ def add_interconnectors(
                         pn.columns.str.contains('|'.join(ic_bmunits))]
                         ].sum(axis=1)
                 )
-        logger.info("Total flow: %s", total_flow)
 
         ramp_rate = total_flow.diff().dropna().abs().mean()
         max_flow = total_flow.abs().max()
-        logger.info("Max ramp rate from data: %s MW", ramp_rate)
 
         interconnectors = n.links.index[n.links.carrier == 'interconnector']
 
         scaling_factor = max_flow / n.links.loc[interconnectors, 'p_nom'].sum()
         n.links.loc[interconnectors, 'p_nom'] *= scaling_factor
-        logger.info("Scaled interconnector capacities: %s (scaling factor: %s)",
-                    n.links.loc[interconnectors, 'p_nom'], scaling_factor)
 
         if not interconnectors.empty:
-            logger.info("Interconnectors found. Computing per unit ramp rate constraints.")
             total_nominal = n.links.loc[interconnectors, 'p_nom'].sum()
-            logger.info("Total nominal capacity of interconnectors: %s MW", total_nominal)
 
             ramp_rate_ppu = ramp_rate / total_nominal
-            logger.info("Calculated per unit ramp rate: %s", ramp_rate_ppu)
+            logger.info("Setting interconnectors ramp rate to %s", ramp_rate_ppu)
 
             n.links.loc[interconnectors, 'ramp_limit_up'] = ramp_rate_ppu
             n.links.loc[interconnectors, 'ramp_limit_down'] = ramp_rate_ppu
-            logger.info("Assigned ramp rate constraints:\n%s",
-                        n.links.loc[interconnectors, ['p_nom', 'ramp_limit_up', 'ramp_limit_down']])
 
 
 def ensure_thermal_supply(n):
