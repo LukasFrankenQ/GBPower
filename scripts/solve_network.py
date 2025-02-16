@@ -197,7 +197,9 @@ def safe_solve(n):
         # n.generators.p_nom *= factor
         relax_line_capacities(n, factor)
         status, _ = n.optimize()
-        factor *= 1.02
+        
+        if status != 'ok':
+            factor *= 1.02
 
         if factor > 10:
             raise Exception('Failed to solve redispatch problem')
