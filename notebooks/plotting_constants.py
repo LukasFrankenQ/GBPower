@@ -5,6 +5,10 @@ import numpy as np
 gif_length = 10 # seconds
 fps = 20
 
+#### plot sizes
+
+width_unit = 6
+height_unit = 4
 
 ##### plotting constants
 
@@ -42,7 +46,7 @@ carrier_colors = {
     "PHS": "#46caf0",
     "solar": "#f9d002",
     "battery": "darkred",
-    "interconnector": "magenta",
+    "interconnector": "plum",
 }
 
 nice_carrier_names = {
