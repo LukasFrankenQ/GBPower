@@ -2,7 +2,7 @@ import numpy as np
 
 #### gif parameters
 
-gif_length = 10 # seconds
+gif_length = 20 # seconds
 fps = 20
 
 #### plot sizes
