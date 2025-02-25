@@ -163,7 +163,12 @@ def add_wind(
         p_nom=pn[plants].max(),
         marginal_cost=np.nan,
         efficiency=1,
-        p_max_pu=pn[plants].div(pn[plants].max()).replace(np.nan, 0),
+        p_max_pu=(
+            pn[plants]
+            .div(pn[plants].max())
+            .replace(np.nan, 0)
+            .clip(lower=0., upper=1.)
+        ),
     )
 
     roc_generators = rocs.index.intersection(plants)
@@ -251,6 +256,12 @@ def add_thermal(
         .intersection(pn.columns)
         .intersection(mel.columns)
     )
+    missing = plants.difference(wholesale_prices.index)
+
+    if len(missing) > 0:
+        logger.warning(f'Missing wholesale prices for {", ".join(missing)}')
+        plants = plants.difference(missing)
+
     logger.info(f'Adding {len(plants)} thermal generators...')
 
     assert plants.isin(wholesale_prices.index).all(), 'Missing wholesale prices for some thermal plants.'    
@@ -540,7 +551,7 @@ def add_interconnectors(
             total_nominal = n.links.loc[interconnectors, 'p_nom'].sum()
 
             ramp_rate_ppu = ramp_rate / total_nominal
-            logger.info("Setting interconnectors ramp rate to %s", ramp_rate_ppu)
+            logger.info(f"Setting interconnectors ramp rate to {ramp_rate_ppu:.3f} GW/30min")
 
             n.links.loc[interconnectors, 'ramp_limit_up'] = ramp_rate_ppu
             n.links.loc[interconnectors, 'ramp_limit_down'] = ramp_rate_ppu

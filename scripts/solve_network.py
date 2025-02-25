@@ -459,7 +459,7 @@ if __name__ == '__main__':
             'nodal wholesale',
             status,
             str(np.around(line_scaling_factor, decimals=2)),
-            '0.0'
+            '0.00'
         ) 
     )
 
