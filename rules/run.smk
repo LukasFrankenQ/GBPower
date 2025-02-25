@@ -78,6 +78,8 @@ rule cluster_network:
 
 rule solve_network:
     input:
+        bmus="data/preprocessed/prepared_bmus.csv",
+        bids="data/base/{day}/bids.csv",
         network_nodal="results/{day}/network_{ic}_s_nodal.nc",
         network_national="results/{day}/network_{ic}_s_national.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
