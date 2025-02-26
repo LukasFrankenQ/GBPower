@@ -301,3 +301,19 @@ def set_nested_attr(obj, attr_path, value):
         obj = getattr(obj, attr)
 
     setattr(obj, attrs[-1], value)
+
+
+def classify_north_south(lon, lat):
+    """Splits GB into north and south, where north represents regions 
+    with diminished wholesale market prices"""
+
+    lon = float(lon)
+    lat = float(lat)
+
+    m = 0.55
+    b = 56.4
+
+    if lat > m * lon + b:
+        return 'north'
+    else:
+        return 'south'

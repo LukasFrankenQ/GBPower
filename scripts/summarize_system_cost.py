@@ -16,7 +16,7 @@ import pypsa
 import numpy as np
 import pandas as pd
 
-from _helpers import configure_logging
+from _helpers import configure_logging, classify_north_south
 
 
 def get_wholesale_cost(n):
