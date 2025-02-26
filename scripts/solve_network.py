@@ -193,14 +193,15 @@ def tune_line_capacities(n, factor):
     n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= factor
 
 
-def safe_solve(n):
+def safe_solve(n, factor=1):
 
     status = 'not_solved'
-    factor = 1
+    hold = n.copy()
 
     while status != 'ok':
         logger.info(f"\nSolving with factor {factor:.2f}\n")
-        # n.generators.p_nom *= factor
+        n.links = hold.links.copy()
+
         tune_line_capacities(n, factor)
         status, _ = n.optimize()
         
@@ -307,11 +308,6 @@ if __name__ == '__main__':
     insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
     insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
 
-    # logger.warning((
-    #     '\nCurrently choosing the minimal line capacity that is feasible.\n'
-    #     'Could scale capacities to match balancing volume instead.\n'
-    # ))
-
     #################### National market ####################
 
     tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
@@ -336,10 +332,13 @@ if __name__ == '__main__':
     # Initialize binary search bounds
     left = 0.5  # minimum reasonable scaling factor
     right = 2.0 # maximum reasonable scaling factor
+
+    unsolvable_case = False # special case deals with matching balancing volume is not possible for feasible model
     
     while not tuned:
         # Try the midpoint of the current range
-        line_scaling_factor = (left + right) / 2
+        if not unsolvable_case:
+            line_scaling_factor = (left + right) / 2
         
         hold_redispatch = n_national_redispatch.copy()
         tuned_line_capacities = tune_line_capacities(hold_redispatch, line_scaling_factor)
@@ -351,6 +350,10 @@ if __name__ == '__main__':
 
             if error <= tolerance * daily_volume:
                 tuned = True
+
+            elif unsolvable_case:
+                tuned = True
+
             else:
                 # Update binary search bounds based on whether we need more or less capacity
                 if balancing_volume > daily_volume:
@@ -361,14 +364,19 @@ if __name__ == '__main__':
                     right = line_scaling_factor
         else:
             # If infeasible, need more line capacity
-            left = line_scaling_factor
+            if not unsolvable_case:
+                left = line_scaling_factor
+            else:
+                line_scaling_factor += 0.02
 
         counter += 1
-        if right - left < 0.01:  # Convergence check
+        if status == 'ok' and right - left < 0.01:  # Convergence check
             tuned = True
+        elif status == 'warning' and right - left < 0.01:
+            unsolvable_case = True
 
         counter += 1
-        if counter > 30:
+        if counter > 100:
             raise Exception('Failed to tune line capacities')
         
         if status == 'ok':
@@ -376,7 +384,6 @@ if __name__ == '__main__':
         else:
             logger.info(f'Model infeasible with line scaling factor {line_scaling_factor:.2f}')
 
-        # solved first such that line relaxation factor can also be applied to the other models
         # solved first such that line relaxation factor can also be applied to the other models
         # status, relaxation_factor = safe_solve(n_national_redispatch)
 
@@ -398,12 +405,12 @@ if __name__ == '__main__':
 
     #################### Zonal market ####################
 
-    tune_line_capacities(n_zonal, line_scaling_factor)
-    tune_line_capacities(n_zonal_redispatch, line_scaling_factor)
+    # tune_line_capacities(n_zonal, line_scaling_factor)
+    # tune_line_capacities(n_zonal_redispatch, line_scaling_factor)
 
-    # status, relaxation_factor = safe_solve(n_zonal) # old way of doing it
-    # relax_line_capacities(n_zonal, relaxation_factor) # new way of doing it
-    status, _ = n_zonal.optimize()
+    status, relaxation_factor = safe_solve(n_zonal, line_scaling_factor)
+
+    # status, _ = n_zonal.optimize()
 
     # assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
     assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
@@ -425,7 +432,9 @@ if __name__ == '__main__':
 
     # status, relaxation_factor = safe_solve(n_zonal_redispatch) # old way of doing it
     # relax_line_capacities(n_zonal_redispatch, relaxation_factor) # new way of doing it
-    status, _ = n_zonal_redispatch.optimize()
+    # status, _ = n_zonal_redispatch.optimize()
+
+    status, relaxation_factor = safe_solve(n_zonal_redispatch, line_scaling_factor)
 
     assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {line_scaling_factor:.2f}'
     n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
@@ -442,17 +451,16 @@ if __name__ == '__main__':
         ) 
     )
 
-
     #################### Nodal market ####################
 
     # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
     # relax_line_capacities(n_nodal, relaxation_factor) # new way of doing it
-    tune_line_capacities(n_nodal, line_scaling_factor)
-    status, _ = n_nodal.optimize()
+    # tune_line_capacities(n_nodal, line_scaling_factor)
+    # status, _ = n_nodal.optimize()
+
+    status, relaxation_factor = safe_solve(n_nodal, line_scaling_factor)
 
     assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
-
-    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
 
     model_execution_overview.append(
         (
@@ -462,6 +470,8 @@ if __name__ == '__main__':
             '0.00'
         ) 
     )
+
+    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
 
     # redispatch calculation (only used to estimate balancing volume)
     # computes the nodal flow after commitments have been made in
