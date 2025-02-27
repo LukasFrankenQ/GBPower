@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright 2024-2024 Lukas Franken
-# SPDX-FileCopyrightText: : 2024-2024 Lukas Franken
+# Copyright 2024-2025 Lukas Franken
+# SPDX-FileCopyrightText: : 2024-2025 Lukas Franken
 #
 # SPDX-License-Identifier: MIT
 """
@@ -122,22 +122,26 @@ def get_bidding_volume(nat, bal):
         bal(pypsa.Network): The network dispatch after balancing.
     """
 
-    lat_bidding_threshold = 55.3 # groups dispatchable generators into north and south
-
     wind = nat.generators.index[nat.generators.carrier.str.contains('wind')]
     water = nat.storage_units.index[nat.storage_units.carrier.isin(['cascade', 'hydro'])]
     solar = nat.generators.index[nat.generators.carrier.str.contains('solar')]
 
     gen = bal.generators
-    gen['y'] = gen.bus.map(bal.buses.y)
+
+    coords = bal.buses.loc[gen.bus, ['x', 'y']]
+    coords.index = gen.index
+
+    gen['region'] = coords.apply(
+        lambda row: classify_north_south(row['x'], row['y']), axis=1
+        )
 
     dispatchable_south = gen.loc[
         (gen.carrier.isin(['fossil', 'biomass', 'coal'])) &
-        (gen['y'] <= lat_bidding_threshold)
+        (gen['region'] == 'south')
     ].index
     dispatchable_north = gen.loc[
         (gen.carrier.isin(['fossil', 'biomass', 'coal'])) &
-        (gen['y'] > lat_bidding_threshold)
+        (gen['region'] == 'north')
     ].index
 
     bidding_volume = pd.Series(0, nat.snapshots)

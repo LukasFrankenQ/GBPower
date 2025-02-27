@@ -21,13 +21,12 @@ from tqdm import tqdm
 from pathlib import Path
 
 sys.path.append(str(Path.cwd() / 'scripts'))
-from _helpers import configure_logging
+from _helpers import configure_logging, classify_north_south
 
 
 def make_north_south_split(
         bmus,
         carrier,
-        threshold=55.3
         ):
 
     if not isinstance(carrier, str):
@@ -35,8 +34,13 @@ def make_north_south_split(
     else:
         mask = bmus['carrier'].str.contains(carrier)
     
-    north = bmus.loc[mask & (bmus['lat'] > threshold)].index
-    south = bmus.loc[mask & (bmus['lat'] <= threshold)].index
+    coords = bmus[['lat', 'lon']]
+    bmus['region'] = coords.apply(
+        lambda row: classify_north_south(row['lon'], row['lat']), axis=1
+        )
+
+    north = bmus.loc[mask & (bmus['region'] == 'north')].index
+    south = bmus.loc[mask & (bmus['region'] == 'south')].index
 
     return north, south
 

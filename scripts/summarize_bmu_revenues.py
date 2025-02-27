@@ -21,7 +21,7 @@ import logging
 import numpy as np
 import pandas as pd
 import pypsa
-from _helpers import configure_logging
+from _helpers import configure_logging, classify_north_south
 
 logger = logging.getLogger(__name__)
 idx = pd.IndexSlice
@@ -74,15 +74,23 @@ def process_daily_balancing_data(df):
     return df
 
 
-def make_north_south_split(n, carrier, comp, threshold=55.3):
+def make_north_south_split(n, carrier, comp):
     comp_df = getattr(n, comp)
-    comp_df["lat"] = comp_df.bus.map(n.buses.y)
+
+    coords = n.buses.loc[comp_df.bus, ['x', 'y']]
+    coords.index = comp_df.index
+
+    comp_df['region'] = coords.apply(
+        lambda row: classify_north_south(row['x'], row['y']), axis=1
+        )
+
     if not isinstance(carrier, str):
         mask = comp_df["carrier"].isin(carrier)
     else:
         mask = comp_df["carrier"].str.contains(carrier)
-    north = comp_df.loc[mask & (comp_df["lat"] > threshold)].index
-    south = comp_df.loc[mask & (comp_df["lat"] <= threshold)].index
+
+    north = comp_df.loc[mask & (comp_df["region"] == 'north')].index
+    south = comp_df.loc[mask & (comp_df["region"] == 'south')].index
     return north, south
 
 
@@ -186,7 +194,7 @@ if __name__ == "__main__":
     configure_logging(snakemake)
 
     actual_bids = pd.read_csv(
-        snakemake.input["bids"], index_col=[0, 1], parse_dates=True
+        snakemake.input["bids"], index_col=[0, 1], parse_dates=[0]
     )
     if not actual_bids.empty:
         actual_bids = process_daily_balancing_data(actual_bids)
@@ -194,7 +202,7 @@ if __name__ == "__main__":
         actual_bids = pd.DataFrame(columns=["price", "vol"])
 
     actual_offers = pd.read_csv(
-        snakemake.input["offers"], index_col=[0, 1], parse_dates=True
+        snakemake.input["offers"], index_col=[0, 1], parse_dates=[0]
     )
     if not actual_offers.empty:
         actual_offers = process_daily_balancing_data(actual_offers)
