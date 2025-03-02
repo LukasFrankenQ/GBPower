@@ -255,7 +255,7 @@ if __name__ == "__main__":
             columns=pd.MultiIndex.from_product(
                 [
                     ["north", "south"],
-                    ["wind", "disp", "hydro", "storage"],
+                    ["wind", "disp", "nuclear", "hydro", "storage"],
                     ["wholesale", "offers", "bids", "cfd", "roc"],
                 ]
             )
@@ -313,6 +313,9 @@ if __name__ == "__main__":
         )
         disp_north, disp_south = make_north_south_split(
             bal, ["fossil", "biomass", "coal"], "generators"
+        )
+        nuclear_north, nuclear_south = make_north_south_split(
+            bal, ["nuclear"], "generators"
         )
         # Split storage assets into one-way (hydro) and two-way (storage)
         hydro_north, hydro_south = make_north_south_split(
@@ -374,6 +377,14 @@ if __name__ == "__main__":
         ).astype(np.float64)
         revenues.loc[:, idx["south", "wind", "wholesale"]] = (
             get_unit_wholesale_revenue(who, "generators", wind_south).sum(axis=1)
+        )
+
+        # Revenue of northern and souther nuclear generators
+        revenues.loc[:, idx["north", "nuclear", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", nuclear_north).sum(axis=1)
+        )
+        revenues.loc[:, idx["south", "nuclear", "wholesale"]] = (
+            get_unit_wholesale_revenue(who, "generators", nuclear_south).sum(axis=1)
         )
 
         # Revenue of northern wind generators
