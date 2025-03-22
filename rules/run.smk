@@ -5,14 +5,14 @@
 rule add_electricity:
     input:
         network='data/raw/lmp_base.nc',
-        roc_values='data/preprocessed/roc_values.csv',
-        bmus=ancient('data/preprocessed/prepared_bmus.csv'),
-        load_weights=ancient('data/preprocessed/load_weights.csv'),
-        cfd_strike_prices=ancient('data/preprocessed/cfd_strike_prices.csv'),
-        nuclear_marginal_price='data/preprocessed/nuclear_marginal_cost.csv',
-        battery_phs_capacities='data/preprocessed/battery_phs_capacities.csv',
+        roc_values='data/prerun/roc_values.csv',
+        bmus=ancient('data/prerun/prepared_bmus.csv'),
+        load_weights=ancient('data/prerun/load_weights.csv'),
+        cfd_strike_prices=ancient('data/prerun/cfd_strike_prices.csv'),
+        nuclear_marginal_price='data/prerun/nuclear_marginal_cost.csv',
+        battery_phs_capacities='data/prerun/battery_phs_capacities.csv',
         interconnection_helpers='data/interconnection_helpers.yaml',
-        thermal_generation_costs=lambda wildcards: 'data/preprocessed/thermal_costs/{year}-week{week}.csv'.format(
+        thermal_generation_costs=lambda wildcards: 'data/prerun/thermal_costs/{year}-week{week}.csv'.format(
             year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
@@ -59,7 +59,7 @@ rule cluster_network:
         network="results/{day}/network_{ic}_s.nc",
         tech_costs="data/costs_2020.csv",
         target_regions=lambda wildcards: f"data/{wildcards.layout}_zones.geojson" if wildcards.layout in ["national", "fti", "eso"] else [],
-        zonal_layout="data/preprocessed/zonal_layout.geojson",
+        zonal_layout="data/prerun/zonal_layout.geojson",
         regions_onshore="data/regions_onshore_s.geojson",
         regions_offshore="data/regions_offshore_s.geojson",
         interconnection_helpers='data/interconnection_helpers.yaml',
@@ -78,7 +78,7 @@ rule cluster_network:
 
 rule solve_network:
     input:
-        bmus="data/preprocessed/prepared_bmus.csv",
+        bmus="data/prerun/prepared_bmus.csv",
         bids="data/base/{day}/bids.csv",
         network_nodal="results/{day}/network_{ic}_s_nodal.nc",
         network_national="results/{day}/network_{ic}_s_national.nc",

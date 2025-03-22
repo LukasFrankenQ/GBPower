@@ -38,9 +38,9 @@ rule build_roc_values:
             __import__('glob')
         ),
         bmu_locations="data/bmus_prepared.csv",
-        cfd_strike_prices="resources/cfd_strike_prices.csv",
+        cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
     output:
-        # "data/preprocessed/roc_values.csv"
+        # "data/prerun/roc_values.csv"
     resources:
         mem_mb=4000,
     log:
@@ -48,7 +48,7 @@ rule build_roc_values:
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_roc_values.py"
+        "../prerun_scripts/build_roc_values.py"
 
 
 rule build_nuclear_bidding_cost:
@@ -74,7 +74,7 @@ rule build_nuclear_bidding_cost:
             __import__('glob')
         ),
     output:
-        # "data/preprocessed/nuclear_marginal_cost.csv"
+        # "data/prerun/nuclear_marginal_cost.csv"
     resources:
         mem_mb=4000,
     log:
@@ -82,7 +82,7 @@ rule build_nuclear_bidding_cost:
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_nuclear_bidding_cost.py"
+        "../prerun_scripts/build_nuclear_bidding_cost.py"
 
 
 rule build_battery_phs_capacities:
@@ -108,7 +108,7 @@ rule build_battery_phs_capacities:
         ),
         bmu_locations="data/bmus_prepared.csv",
     output:
-        # "data/preprocessed/battery_phs_capacities.csv"
+        # "data/prerun/battery_phs_capacities.csv"
     resources:
         mem_mb=4000,
     log:
@@ -116,7 +116,7 @@ rule build_battery_phs_capacities:
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_battery_phs_capacities.py"
+        "../prerun_scripts/build_battery_phs_capacities.py"
 
 
 def get_thermal_costs_input_files(wildcards):
@@ -147,7 +147,7 @@ rule build_thermal_generator_prices:
         get_thermal_costs_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        # 'data/preprocessed/thermal_costs/{year}-week{week}.csv'
+        # 'data/prerun/thermal_costs/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
@@ -155,7 +155,7 @@ rule build_thermal_generator_prices:
     conda:
         '../envs/environment.yaml',
     script:
-        '../non_workflow_scripts/build_thermal_generator_prices.py'
+        '../prerun_scripts/build_thermal_generator_prices.py'
 
 
 def get_balancing_input_files(wildcards):
@@ -186,7 +186,7 @@ rule build_balancing_prices:
         get_balancing_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        # 'data/preprocessed/balancing_prices/{year}-week{week}.csv'
+        # 'data/prerun/balancing_prices/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
@@ -194,7 +194,7 @@ rule build_balancing_prices:
     conda:
         '../envs/environment.yaml',
     script:
-        '../non_workflow_scripts/build_balancing_prices.py'
+        '../prerun_scripts/build_balancing_prices.py'
 
 
 rule build_bus_regions:
@@ -213,7 +213,7 @@ rule build_bus_regions:
     conda:
         "../envs/environment.yaml"
     script:
-        "../non_workflow_scripts/build_bus_regions.py"
+        "../prerun_scripts/build_bus_regions.py"
 
 
 rule build_load_weights:
@@ -223,7 +223,7 @@ rule build_load_weights:
         gsp_regions_lookup="data/gsp_gnode_directconnect_region_lookup.csv",
         demandpeaks="data/FES-2021--Leading_the_Way--demandpk-all--gridsupplypoints.csv",
     output:
-        load_weights=protected("data/preprocessed/load_weights.csv"),
+        # load_weights="data/prerun/load_weights.csv",
     log:
         "../logs/build_load_weights.log",
     threads: 1
@@ -232,7 +232,7 @@ rule build_load_weights:
     conda:
         "../envs/environment.yaml"
     script:
-        "../non_workflow_scripts/build_load_weights.py"
+        "../prerun_scripts/build_load_weights.py"
 
 
 rule prepare_bmus:
@@ -242,7 +242,7 @@ rule prepare_bmus:
         bmus_locs="data/raw/bmunits_loc.csv",
         bmus_raw="data/raw/temp_located_bmus.csv",
     output:
-        bmus=protected("data/preprocessed/prepared_bmus.csv"),
+        # bmus="data/prerun/prepared_bmus.csv",
     log:
         "../logs/prepare_bmus.log",
     threads: 1
@@ -251,7 +251,7 @@ rule prepare_bmus:
     conda:
         "../envs/environment.yaml"
     script:
-        "../non_workflow_scripts/prepare_bmus.py"
+        "../prerun_scripts/prepare_bmus.py"
 
 
 rule build_cfds:
@@ -274,7 +274,7 @@ rule build_cfds:
         bmu_locations="data/temp_located_bmus.csv",
         bmu_mappings="data/cfd_registers/cfd_to_bm_unit_mapping.csv",
     output:
-        cfd_strike_prices=protected("data/preprocessed/cfd_strike_prices.csv"),
+        cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
     resources:
         mem_mb=4000,
     log:
@@ -282,28 +282,30 @@ rule build_cfds:
     conda:
         "../envs/environment.yaml",
     script:
-        "../scripts/build_cfds.py"
+        "../prerun_scripts/build_cfds.py"
 
 
 rule build_zonal_layout:
     input:
         eso_zones="data/raw/eso_zones.geojson",
     output:
-        # zonal_layout="data/preprocessed/zonal_layout.geojson",
+        # zonal_layout="data/prerun/zonal_layout.geojson",
     log:
         "../logs/zonal_layout.log",
     conda:
         "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_zonal_layout.py"
+        "../prerun_scripts/build_zonal_layout.py"
 
 
 rule build_flow_constraints:
     output:
-        # flow_constraints="data/preprocessed/flow_constraints_{year}.csv"
+        # flow_constraints="data/prerun/flow_constraints_{year}.csv"
     resources:
         mem_mb=4000,
     log:
         "../logs/flow_constraints_{year}.log",
+    conda:
+        "../envs/environment.yaml",
     script:
-        "../non_workflow_scripts/build_flow_constraints.py"
+        "../prerun_scripts/build_flow_constraints.py"
