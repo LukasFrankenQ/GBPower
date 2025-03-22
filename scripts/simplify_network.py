@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors, Lukas Franken
+#
+# SPDX-License-Identifier: MIT
+
+# coding: utf-8
 import logging
 from functools import reduce
 
