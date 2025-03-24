@@ -77,6 +77,13 @@ rule summarize_frontend_data:
         roc_values="data/prerun/roc_values.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
+        gb_shape="data/gb_shape.geojson",
+        bids="data/base/{day}/bids.csv",
+        offers="data/base/{day}/offers.csv",
+        default_balancing_prices=lambda wildcards: 'data/prerun/balancing_prices/{year}-week{week}.csv'.format(
+            year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
+            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
+        ),
     output:
         frontend_data="frontend/{day}/revenues_{ic}.csv",
     resources:

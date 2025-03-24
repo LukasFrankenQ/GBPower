@@ -203,8 +203,8 @@ rule build_bus_regions:
         total_shape="data/gb_shape.geojson",
         offshore_shapes="data/offshore_shapes.geojson",
     output:
-        regions_onshore=protected("data/regions_onshore.geojson"),
-        regions_offshore=protected("data/regions_offshore.geojson"),
+        # regions_onshore="data/regions_onshore.geojson",
+        # regions_offshore="data/regions_offshore.geojson",
     log:
         "../logs/build_bus_regions.log",
     threads: 1
