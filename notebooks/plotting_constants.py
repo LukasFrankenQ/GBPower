@@ -11,6 +11,14 @@ width_unit = 6
 height_unit = 4
 
 ##### plotting constants
+policy_colors = {
+    'national': 'red',
+    'no_ftr_zonal': 'rebeccapurple', # policy 1 in the paper
+    'zonal': 'lime', # policy 2 in the paper
+    'zonal_with_policy': 'deepskyblue', # policy 3 in the paper
+}
+# zonal_with_policy_color = 'magenta'
+# zonal_with_policy_color = 'darkorange'
 
 
 nice_names = {

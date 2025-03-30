@@ -262,10 +262,29 @@ if __name__ == "__main__":
 
     available_shares = pd.Series(np.nan, all_carriers.unique())
 
+    # print()
+    # print(all_revenues.head())
+    # print(all_carriers.head())
+
     for carrier in lv3_carriers:
 
-        national_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers == carrier].index, 'national']].sum()
-        zonal_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers == carrier].index, 'zonal']].sum()
+        # national_total = all_revenues.sum().loc[
+        #     idx[all_carriers.loc[all_carriers == carrier].index, 'national']].sum()
+        # zonal_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers == carrier].index, 'zonal']].sum()
+        # available_shares.loc[carrier] = zonal_total / national_total
+
+        national_total = all_revenues.sum().loc[
+            idx[all_carriers.loc[all_carriers.isin(lv3_carriers)].index, 'national']].sum()
+        zonal_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers.isin(lv3_carriers)].index, 'zonal']].sum()
+
+        available_shares.loc[carrier] = zonal_total / national_total
+
+    # print(available_shares)
+    # import sys
+    # sys.exit()
+
+
+    for carrier in lv3_carriers:
         available_shares.loc[carrier] = zonal_total / national_total
 
     for carrier, share in available_shares.dropna().items():
