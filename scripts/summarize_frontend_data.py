@@ -211,12 +211,12 @@ if __name__ == "__main__":
     if not bids.empty:
         bid_price = get_weighted_avg_price(process_balancing_data(bids))
     else:
-        bid_price = backup_balancing_prices.loc['bids', 'disp']
+        bid_price = backup_balancing_prices.loc['disp', 'bids']
 
     if not offers.empty:
         offer_price = get_weighted_avg_price(process_balancing_data(offers))
     else:
-        offer_price = backup_balancing_prices.loc['offers', 'disp']
+        offer_price = backup_balancing_prices.loc['disp', 'offers']
 
     gb = gpd.read_file(snakemake.input.gb_shape).set_index('name')
 
