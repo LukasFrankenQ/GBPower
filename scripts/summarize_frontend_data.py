@@ -188,7 +188,7 @@ def get_unit_revenues(unit, who, bal):
     return revenues
 
 
-def calculate_wholesale_volumes(unit, who):
+def calculate_dispatch_volumes(unit, who):
     """
     Calculate the total electricity volume sold by a unit in the wholesale market.
     
@@ -322,11 +322,13 @@ if __name__ == "__main__":
 
     all_dispatch = pd.DataFrame(
         index=all_revenues.index,
-        columns=pd.MultiIndex.from_product([all_units, ['national', 'zonal']])
+        columns=pd.MultiIndex.from_product([all_units, ['national', 'zonal'], ['wholesale', 'redispatch']])
     )
 
     for unit in all_units:
-        all_dispatch.loc[:, idx[unit, 'national']] = calculate_wholesale_volumes(unit, nat_who)
-        all_dispatch.loc[:, idx[unit, 'zonal']] = calculate_wholesale_volumes(unit, zon_who)
-
+        all_dispatch.loc[:, idx[unit, 'national', 'wholesale']] = calculate_dispatch_volumes(unit, nat_who)
+        all_dispatch.loc[:, idx[unit, 'zonal', 'wholesale']] = calculate_dispatch_volumes(unit, zon_who)
+        all_dispatch.loc[:, idx[unit, 'national', 'redispatch']] = calculate_dispatch_volumes(unit, nat_bal)
+        all_dispatch.loc[:, idx[unit, 'zonal', 'redispatch']] = calculate_dispatch_volumes(unit, zon_bal)
+    
     all_dispatch.sort_index(level=0, axis=1).to_csv(snakemake.output.frontend_data_dispatch)
