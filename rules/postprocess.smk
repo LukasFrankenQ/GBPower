@@ -85,7 +85,8 @@ rule summarize_frontend_data:
             week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
     output:
-        frontend_data="frontend/{day}/revenues_{ic}.csv",
+        frontend_data_revenues="frontend/{day}/revenues_{ic}.csv",
+        frontend_data_dispatch="frontend/{day}/dispatch_{ic}.csv",
     resources:
         mem_mb=1500,
     log:

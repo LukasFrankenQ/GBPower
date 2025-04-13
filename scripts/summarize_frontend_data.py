@@ -188,6 +188,39 @@ def get_unit_revenues(unit, who, bal):
     return revenues
 
 
+def calculate_wholesale_volumes(unit, who):
+    """
+    Calculate the total electricity volume sold by a unit in the wholesale market.
+    
+    Parameters
+    ----------
+    unit : str
+        The name of the generation unit
+    who : pypsa.Network
+        The wholesale market network
+        
+    Returns
+    -------
+    pandas.Series
+        Time series of electricity volumes sold in MWh
+    """
+    volumes = pd.Series(0, index=who.snapshots)
+    
+    # Check if unit is a generator
+    if unit in who.generators_t.p:
+        volumes = who.generators_t.p[unit] * 0.5
+    
+    # Check if unit is a storage unit
+    elif unit in who.storage_units_t.p:
+        volumes = who.storage_units_t.p[unit] * 0.5
+    
+    # Check if unit is an interconnector (link)
+    elif unit in who.links_t.p0 and unit in who.links.index[who.links.carrier == 'interconnector']:
+        volumes = who.links_t.p0[unit] * 0.5
+    
+    return volumes
+
+
 if __name__ == "__main__":
     configure_logging(snakemake)
 
@@ -262,27 +295,13 @@ if __name__ == "__main__":
 
     available_shares = pd.Series(np.nan, all_carriers.unique())
 
-    # print()
-    # print(all_revenues.head())
-    # print(all_carriers.head())
-
     for carrier in lv3_carriers:
-
-        # national_total = all_revenues.sum().loc[
-        #     idx[all_carriers.loc[all_carriers == carrier].index, 'national']].sum()
-        # zonal_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers == carrier].index, 'zonal']].sum()
-        # available_shares.loc[carrier] = zonal_total / national_total
 
         national_total = all_revenues.sum().loc[
             idx[all_carriers.loc[all_carriers.isin(lv3_carriers)].index, 'national']].sum()
         zonal_total = all_revenues.sum().loc[idx[all_carriers.loc[all_carriers.isin(lv3_carriers)].index, 'zonal']].sum()
 
         available_shares.loc[carrier] = zonal_total / national_total
-
-    # print(available_shares)
-    # import sys
-    # sys.exit()
-
 
     for carrier in lv3_carriers:
         available_shares.loc[carrier] = zonal_total / national_total
@@ -299,4 +318,15 @@ if __name__ == "__main__":
         ), axis=1)
 
     all_revenues = all_revenues.sort_index(axis=1)
-    all_revenues.to_csv(snakemake.output.frontend_data)
+    all_revenues.to_csv(snakemake.output.frontend_data_revenues)
+
+    all_dispatch = pd.DataFrame(
+        index=all_revenues.index,
+        columns=pd.MultiIndex.from_product([all_units, ['national', 'zonal']])
+    )
+
+    for unit in all_units:
+        all_dispatch.loc[:, idx[unit, 'national']] = calculate_wholesale_volumes(unit, nat_who)
+        all_dispatch.loc[:, idx[unit, 'zonal']] = calculate_wholesale_volumes(unit, zon_who)
+
+    all_dispatch.sort_index(level=0, axis=1).to_csv(snakemake.output.frontend_data_dispatch)
