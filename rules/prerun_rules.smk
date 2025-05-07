@@ -147,7 +147,7 @@ rule build_thermal_generator_prices:
         get_thermal_costs_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        'data/prerun/thermal_costs/{year}-week{week}.csv'
+        # 'data/prerun/thermal_costs/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
@@ -186,7 +186,7 @@ rule build_balancing_prices:
         get_balancing_input_files,
         bmus='data/bmus_prepared.csv',
     output:
-        'data/prerun/balancing_prices/{year}-week{week}.csv'
+        # 'data/prerun/balancing_prices/{year}-week{week}.csv'
     resources:
         mem_mb=4000,
     log:
