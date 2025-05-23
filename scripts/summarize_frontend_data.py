@@ -343,3 +343,5 @@ if __name__ == "__main__":
 
     all_dispatch.sort_index(level=0, axis=1).to_csv(snakemake.output.frontend_dispatch)
     intercon_dispatch.sort_index(level=0, axis=1).to_csv(snakemake.output.frontend_dispatch_intercon)
+
+    nat_who.generators_t.marginal_cost.to_csv(snakemake.output.frontend_marginal_costs)
