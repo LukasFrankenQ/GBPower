@@ -89,6 +89,7 @@ rule summarize_frontend_data:
         frontend_dispatch="frontend/{day}/dispatch_{ic}.csv",
         frontend_dispatch_intercon="frontend/{day}/dispatch_flex_{ic}_intercon.csv",
         frontend_marginal_costs="frontend/{day}/marginal_costs_{ic}.csv",
+        frontend_thermal_dispatch="frontend/{day}/thermal_dispatch_{ic}.csv",
     resources:
         mem_mb=1500,
     log:

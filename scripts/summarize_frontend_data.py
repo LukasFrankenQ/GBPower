@@ -345,3 +345,10 @@ if __name__ == "__main__":
     intercon_dispatch.sort_index(level=0, axis=1).to_csv(snakemake.output.frontend_dispatch_intercon)
 
     nat_who.generators_t.marginal_cost.to_csv(snakemake.output.frontend_marginal_costs)
+    thermal_units = nat_who.generators.index[
+        nat_who.generators.carrier.isin(['fossil', 'coal', 'biomass'])
+        ]
+    pd.concat({
+        'national': nat_bal.generators_t.p.loc[:, thermal_units],
+        'zonal': zon_bal.generators_t.p.loc[:, thermal_units]
+    }, axis=1).to_csv(snakemake.output.frontend_thermal_dispatch)
