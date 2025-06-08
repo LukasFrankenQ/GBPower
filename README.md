@@ -64,7 +64,7 @@ for day in pd.date_range('2022-01-01', '2024-12-31', freq='d').strftime('%Y-%m-%
 - Difficulty level: 
     - 🐮 Easy
     - 🦂 Moderate
-    - 🐉 Very hard (potentially worthy of a research article)
+    - 🐉 Very hard
 
 - 🐮: **Clean-up post-processing**; the `rules` in `rules/postprocess.smk` grew dynamically with the requirements of the paper and are therefore in a chaotic state. They could be cleaned up.
 - 🐮: **Remove `ic` wildcard**; the `ic` wildcard can take the values `flex` or `static`, but the latter is redundant, and therefore the wildcard could be removed.
