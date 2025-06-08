@@ -54,7 +54,7 @@ for day in pd.date_range('2022-01-01', '2024-12-31', freq='d').strftime('%Y-%m-%
 ```
 
 - Create a summary dictionary `mkdir summaries`.
-- Next, run the script `gather_all.py` from the root directory.
+- Next, run the script `docs/gather_all.py` from the root directory.
 - After that, the files in `notebooks/` should be functional and build the figures from the paper.
 
 
