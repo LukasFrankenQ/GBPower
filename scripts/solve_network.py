@@ -86,9 +86,11 @@ def freeze_battery_commitments(n_from, n_to):
         p_set = n_from.storage_units_t['p'][su]
 
         bus = n_to.storage_units.loc[su, 'bus']
+
         n_to.remove('StorageUnit', su)
 
-        new_load = n_to.loads_t['p_set'][bus] - p_set
+        load_name = n_to.loads.index[n_to.loads.bus == bus][0]
+        new_load = n_to.loads_t['p_set'][load_name] - p_set
 
         set_nested_attr(
             n_to,
@@ -310,6 +312,17 @@ if __name__ == '__main__':
     insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
     insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
 
+    # RNP models
+    # rnp1: IC have nodal price signal
+    # rnp2: batteries have nodal price signal
+    # rnp3: both have nodal price signal
+    # (no redispatch model needed, balancing volume is determined from the difference
+    # between rnpx to n_nodal)
+
+    rnp1 = n_national.copy()
+    rnp2 = n_national.copy()
+    rnp3 = n_national.copy()
+
     #################### National market ####################
 
     tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
@@ -331,18 +344,18 @@ if __name__ == '__main__':
     # the following loop ensures that modelled balancing volume matches actual balancing volume
     tuned = False
     counter = 0
-    
+
     # Initialize binary search bounds
     left = 0.5  # minimum reasonable scaling factor
     right = 2.0 # maximum reasonable scaling factor
 
     unsolvable_case = False # special case deals with matching balancing volume is not possible for feasible model
-    
+
     while not tuned:
         # Try the midpoint of the current range
         if not unsolvable_case:
             line_scaling_factor = (left + right) / 2
-        
+
         hold_redispatch = n_national_redispatch.copy()
         tuned_line_capacities = tune_line_capacities(hold_redispatch, line_scaling_factor)
         status, _ = hold_redispatch.optimize(solver_name=solver_name)
@@ -381,7 +394,7 @@ if __name__ == '__main__':
         counter += 1
         if counter > 100:
             raise Exception('Failed to tune line capacities')
-        
+
         if status == 'ok':
             logger.info(f'Received balancing volume {balancing_volume:.2f} with line scaling factor {line_scaling_factor:.2f}')
         else:
@@ -405,6 +418,62 @@ if __name__ == '__main__':
             f'{balancing_volume*1e-3:.2f}'
         ) 
     )
+
+    #################### Nodal market ####################
+
+    # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
+    # relax_line_capacities(n_nodal, relaxation_factor) # new way of doing it
+    # tune_line_capacities(n_nodal, line_scaling_factor)
+    # status, _ = n_nodal.optimize(solver_name=solver_name)
+
+    status, relaxation_factor = safe_solve(n_nodal, line_scaling_factor)
+
+    assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+
+    model_execution_overview.append(
+        (
+            'nodal wholesale',
+            status,
+            str(np.around(line_scaling_factor, decimals=2)),
+            '0.00'
+        ) 
+    )
+
+    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
+
+    #################### RNP models ####################
+
+    freeze_interconnector_commitments(n_nodal, rnp1)
+
+    freeze_battery_commitments(n_nodal, rnp2)
+
+    freeze_interconnector_commitments(n_nodal, rnp3)
+    freeze_battery_commitments(n_nodal, rnp3)
+
+    nice_names = {
+        'rnp1': 'ICs nodal price signal',
+        'rnp2': 'Batteries nodal price signal',
+        'rnp3': 'Both nodal price signal',
+    }
+
+    for model in ['rnp1', 'rnp2', 'rnp3']:
+
+        n_rnp = globals()[model]
+        status, relaxation_factor = safe_solve(n_rnp, line_scaling_factor)
+        balancing_volume = get_bidding_volume(n_rnp, n_nodal).sum()
+
+        assert status == 'ok', f'{nice_names[model]} model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+
+        globals()[model].export_to_netcdf(snakemake.output[f'network_{model}'])
+
+        model_execution_overview.append(
+            (
+                nice_names[model],
+                status,
+                str(np.around(line_scaling_factor, decimals=2)),
+                f'{balancing_volume*1e-3:.2f}'
+            ) 
+        )
 
     #################### Zonal market ####################
 
@@ -454,33 +523,6 @@ if __name__ == '__main__':
         ) 
     )
 
-    #################### Nodal market ####################
-
-    # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
-    # relax_line_capacities(n_nodal, relaxation_factor) # new way of doing it
-    # tune_line_capacities(n_nodal, line_scaling_factor)
-    # status, _ = n_nodal.optimize(solver_name=solver_name)
-
-    status, relaxation_factor = safe_solve(n_nodal, line_scaling_factor)
-
-    assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
-
-    model_execution_overview.append(
-        (
-            'nodal wholesale',
-            status,
-            str(np.around(line_scaling_factor, decimals=2)),
-            '0.00'
-        ) 
-    )
-
-    n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
-
-    # redispatch calculation (only used to estimate balancing volume)
-    # computes the nodal flow after commitments have been made in
-    # the wholesale market. Therefore, battery (and interconnector po-
-    # sitions if ic wildcard == 'flex') positions are inserted into a
-    # nodal network layout.
 
     print('')
     print((title := 'Model Execution Overview'))

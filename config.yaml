@@ -4,7 +4,7 @@ scenario:
   start: '2022-02-01'
   end: '2022-02-28'
 
-solver: 'gurobi'
+solver: 'highs'
 
 tech_colors:
   nuclear: "#549ca2"

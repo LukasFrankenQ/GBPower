@@ -97,6 +97,9 @@ rule solve_network:
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
+        network_rnp1="results/{day}/network_{ic}_s_rnp1_solved.nc",
+        network_rnp2="results/{day}/network_{ic}_s_rnp2_solved.nc",
+        network_rnp3="results/{day}/network_{ic}_s_rnp3_solved.nc",
     resources:
         mem_mb=1500,
     log:

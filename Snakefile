@@ -16,7 +16,8 @@ min_version("8.11")
 wildcard_constraints:
     day=r"\d{4}-\d{2}-\d{2}",
     layout=r"national|zonal|nodal",
-    ic=r"flex"
+    ic=r"flex",
+    design=r"[a-z]+[2-3][0-9]{3}",
 
 configfile: "config.yaml"
 
