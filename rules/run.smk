@@ -51,7 +51,7 @@ rule simplify_network:
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_{ic}_s.log",  
+        "../logs/networks/{day}_{ic}_s.log",
     conda:
         "../envs/environment.yaml"
     script:

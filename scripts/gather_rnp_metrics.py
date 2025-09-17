@@ -21,10 +21,9 @@ def get_energy_balance(n):
     nice_balance['imports'] = n.links_t.p0[ics].clip(lower=0).sum().mul(0.5e-3).sum()
     nice_balance['exports'] = n.links_t.p1[ics].clip(lower=0).sum().mul(0.5e-3).sum()
 
-    generation = n.statistics.energy_balance().loc[idx[
-        'Generator',
-        ['biomass', 'fossil', 'nuclear', 'offwind', 'onwind', 'solar'],
-        ]].mul(0.5e-3)
+    carriers = ['biomass', 'fossil', 'nuclear', 'offwind', 'onwind', 'solar']
+    available_carriers = [c for c in carriers if ('Generator', c) in n.statistics.energy_balance().index]
+    generation = n.statistics.energy_balance().loc[idx['Generator', available_carriers]].mul(0.5e-3)
     generation.index = generation.index.get_level_values(1)
     nice_balance = pd.concat([nice_balance, generation])
 
