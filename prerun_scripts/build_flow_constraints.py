@@ -67,20 +67,27 @@ def get_boundary_flow_day(date_range):
         .tz_convert('Europe/London')
     )
 
+    resource_id = "38a18ec1-9e40-465d-93fb-301e80fd1352"
+
+    # Use ISO with 'T' separator (ESO examples use this)
+    start_s = start.strftime("%Y-%m-%dT%H:%M:%S")
+    end_s   = end.strftime("%Y-%m-%dT%H:%M:%S")
+
     sql_query = (
-        '''SELECT COUNT(*) OVER () AS _count, * FROM "38a18ec1-9e40-465d-93fb-301e80fd1352"'''+
-        ''' WHERE "Date (GMT/BST)" >= '{}' '''.format(start.strftime("%Y-%m-%d %H:%M:%S")) +
-        '''AND "Date (GMT/BST)" <= '{}' '''.format(end.strftime("%Y-%m-%d %H:%M:%S")) +
-        '''ORDER BY "_id" ASC LIMIT 1000'''
+        f'''SELECT COUNT(*) OVER () AS _count, * FROM "{resource_id}" '''
+        f'''WHERE "Date (GMT/BST)" >= '{start_s}' '''
+        f'''AND "Date (GMT/BST)" <= '{end_s}' '''
+        f'''ORDER BY "_id" ASC LIMIT 1000'''
     )
 
     params = {'sql': sql_query}
 
     response = requests.get(
-        'https://api.nationalgrideso.com/api/3/action/datastore_search_sql',
-        params=parse.urlencode(params)
-        )
-
+        "https://api.neso.energy/api/3/action/datastore_search_sql",
+        params={"sql": sql_query},
+        timeout=60
+    )
+    response.raise_for_status()
     data = response.json()["result"]
 
     if not data['records']:
