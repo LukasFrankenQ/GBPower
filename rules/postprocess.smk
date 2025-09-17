@@ -2,6 +2,26 @@
 #
 # SPDX-License-Identifier: MIT
 
+rule gather_rnp_metrics:
+    input:
+        network_nodal="results/{day}/network_flex_s_nodal_solved.nc",
+        network_national="results/{day}/network_flex_s_national_solved.nc",
+        network_rnp1="results/{day}/network_flex_s_rnp1_solved.nc",
+        network_rnp2="results/{day}/network_flex_s_rnp2_solved.nc",
+    output:
+        interconnector_flows="rnp_metrics/{day}/interconnector_flows.csv",
+        storage_operation="rnp_metrics/{day}/storage_operation.csv",
+        energy_balance="rnp_metrics/{day}/energy_balance.csv",
+        marginal_prices="rnp_metrics/{day}/marginal_prices.csv",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/rnp_metrics/{day}_flex.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../scripts/gather_rnp_metrics.py"
+
 
 rule summarize_bmu_revenues:
     input:
