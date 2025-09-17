@@ -78,6 +78,7 @@ def freeze_battery_commitments(n_from, n_to):
     way as n_from.
     '''
 
+    '''
     for su in n_from.storage_units_t['p'].columns:
 
         # if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
@@ -97,6 +98,9 @@ def freeze_battery_commitments(n_from, n_to):
             f'loads_t.p_set.{bus}',
             new_load
         )
+    '''
+    units = n_from.storage_units_t['p'].columns
+    n_to.storage_units_t.p_set.loc[:, units] = n_from.storage_units_t.p.loc[:, units]
 
 
 def freeze_interconnector_commitments(n_from, n_to):
