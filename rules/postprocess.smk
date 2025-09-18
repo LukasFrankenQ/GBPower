@@ -6,6 +6,7 @@ rule gather_rnp_metrics:
     input:
         network_nodal="results/{day}/network_flex_s_nodal_solved.nc",
         network_national="results/{day}/network_flex_s_national_solved.nc",
+        network_national_redispatch="results/{day}/network_flex_s_national_solved_redispatch.nc",
         network_rnp1="results/{day}/network_flex_s_rnp1_solved.nc",
         network_rnp2="results/{day}/network_flex_s_rnp2_solved.nc",
     output:
@@ -13,6 +14,7 @@ rule gather_rnp_metrics:
         storage_operation="rnp_metrics/{day}/storage_operation.csv",
         energy_balance="rnp_metrics/{day}/energy_balance.csv",
         marginal_prices="rnp_metrics/{day}/marginal_prices.csv",
+        balancing_volume="rnp_metrics/{day}/balancing_volume.csv",
     resources:
         mem_mb=1500,
     log:

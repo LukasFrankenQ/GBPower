@@ -12,6 +12,8 @@ import pandas as pd
 
 from _helpers import configure_logging
 
+from summarize_system_cost import get_bidding_volume
+
 
 def get_energy_balance(n):
 
@@ -42,6 +44,7 @@ if __name__ == '__main__':
 
     nod = pypsa.Network(snakemake.input['network_nodal'])
     nat = pypsa.Network(snakemake.input['network_national'])
+    nat_bal = pypsa.Network(snakemake.input['network_national_redispatch'])
     rnp1 = pypsa.Network(snakemake.input['network_rnp1'])
     rnp2 = pypsa.Network(snakemake.input['network_rnp2'])
 
@@ -79,3 +82,6 @@ if __name__ == '__main__':
     flows = flows.reorder_levels([0,1], axis=1)
 
     flows.to_csv(snakemake.output['interconnector_flows'])
+
+    balancing_volume = get_bidding_volume(nat, nat_bal)
+    balancing_volume.to_csv(snakemake.output['balancing_volume'])
