@@ -565,8 +565,8 @@ def add_interconnectors(
             country_generator_steps = generator_steps
 
         m0 = europe_wholesale_prices.loc[:, country]
-        logger.warning('slope has to the converted to £ still!')
-        s = europe_cost_slopes[country] / 1000 # convert to £/MW
+        logger.warning('simplified slope conversion to £!')
+        s = europe_cost_slopes[country] / 1000 / 1.15 # convert to £/MW
 
         month = n.snapshots[0].strftime('%Y-%m')
         s *= meritorder_slope_factors.loc[month, 'factor_relative_to_2019']
