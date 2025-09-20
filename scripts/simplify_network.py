@@ -304,6 +304,9 @@ def simplify_links(
             seen.add(u)
 
     busmap = n.buses.index.to_series()
+    
+    # print('busmap')
+    # print(busmap.tail(20))
 
     connection_costs_per_link = _prepare_connection_costs_per_link(
         n, costs, renewables, length_factor
@@ -311,9 +314,18 @@ def simplify_links(
     connection_costs_to_bus = pd.DataFrame(
         0.0, index=n.buses.index, columns=list(connection_costs_per_link)
     )
+    # print(labels.value_counts().loc[lambda s: s > 2])
+
+    # import sys
+    # sys.exit()
 
     for lbl in labels.value_counts().loc[lambda s: s > 2].index:
+        # print('\n\n\n')
+        # print(lbl)
         for b, buses, links in split_links(labels.index[labels == lbl]):
+
+            logger.warning('Skipping link aggregation for {}'.format(lbl))
+            continue
             if len(buses) <= 2:
                 continue
 
@@ -363,6 +375,9 @@ def simplify_links(
                 )
             )
 
+            # print('=============================')
+            # print(b, buses, links)
+            # print('all_links', all_links)
             n.mremove("Link", all_links)
 
             static_attrs = n.components["Link"]["attrs"].loc[lambda df: df.static]
@@ -382,6 +397,17 @@ def simplify_links(
         aggregation_strategies=aggregation_strategies,
         exclude_carriers=exclude_carriers,
     )
+
+    # print('=============================')
+    # print('after simplify_links')
+    # print(n.buses.loc[n.buses.carrier == 'electricity'])
+    # print(n.links.loc[n.links.carrier == 'interconnector'])
+
+    # print('busmap')
+    # print(busmap.tail(20))
+    # import sys
+    # sys.exit()
+
     return n, busmap
 
 
@@ -512,10 +538,12 @@ if __name__ == "__main__":
     configure_logging(snakemake)
 
     n = pypsa.Network(snakemake.input.network)
+    # print(n.buses.loc[n.buses.carrier == 'electricity'])
 
     with open(snakemake.input['interconnection_helpers'], 'r') as f:
         country_names = list(yaml.safe_load(f)['country_coords'])
     
+    # print('country_names', country_names)
     solver_name = 'highs'
 
     simplify_network = {
@@ -602,6 +630,13 @@ if __name__ == "__main__":
         snakemake.output,
         aggregation_strategies,
     )
+
+    # print('after simplify_network')
+    # print(n.buses.loc[n.buses.carrier == 'electricity'])
+    # print(n.links.loc[n.links.carrier == 'interconnector'])
+
+    # import sys
+    # sys.exit()
 
     # busmaps = [trafo_map]
     busmaps = [trafo_map, simplify_links_map]

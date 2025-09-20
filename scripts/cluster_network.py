@@ -497,6 +497,7 @@ if __name__ == "__main__":
         country_names = list(yaml.safe_load(f)['country_coords'])
 
     network_countries = n.buses.index.intersection(country_names)
+    print('network_countries', network_countries)
     custom_busmap.drop(
         custom_busmap.index.intersection(network_countries),
         inplace=True

@@ -433,11 +433,26 @@ def add_interconnectors(
 
             rr = nemo.iloc[:,0].diff().dropna().abs().max()
             link_kwargs.update({
-                'ramp_rate_up': rr,
-                'ramp_rate_down': rr,
+                'ramp_limit_up': rr,
+                'ramp_limit_down': rr,
             })
             p_nom = max(p_nom, nemo.iloc[:,0].abs().max())
             flow = nemo.iloc[:,0]
+        
+
+        elif ic in ['Moyle', 'EastWest']:
+            
+            link_kwargs = {
+                'bus1': {
+                    'Moyle': '5899',
+                    'EastWest': '5941',
+                }[ic],
+            }
+            rr = 0.125 # best guess from operational data which suggests the interconnectors
+                       # need around two hours to ramp up/down
+                       # see https://www.smartgriddashboard.com/roi/interconnection/
+            p_nom = 500
+            flow = pd.Series(0, index=nemo.index)
 
         else:
             inter_flow = bmus.loc[
@@ -463,14 +478,14 @@ def add_interconnectors(
             
             rr = flow.diff().dropna().abs().max()
             link_kwargs.update({
-                'ramp_rate_up': rr,
-                'ramp_rate_down': rr,
+                'ramp_limit_up': rr,
+                'ramp_limit_down': rr,
             })
 
             if (flow == 0).all():
                 logger.info(f'No interconnector flow data for {ic}')
                 continue
-        
+
         country_ic_flows[country] += flow
 
         n.add(
@@ -518,7 +533,7 @@ def add_interconnectors(
 
         n.links.loc[interconnectors, 'ramp_limit_up'] = ramp_rate_ppu
         n.links.loc[interconnectors, 'ramp_limit_down'] = ramp_rate_ppu
-    
+
     ######    ADDING LOAD AND LOCAL MARKET GENERATORS IN NEIGHBOURING COUNTRIES    ######
 
     # this setup simulates a local market for each country that
