@@ -420,8 +420,8 @@ def build_europe_generation(date_range):
             .tz_convert(date_range.tz)
         )
 
-    COUNTRIES = ['IE', 'DK', 'FR', 'NL', 'BE', 'NO']
-    country_names = ['Ireland', 'Denmark', 'France', 'Netherlands', 'Belgium', 'Norway']
+    COUNTRIES = ['IE', 'DK', 'FR', 'NL', 'BE', 'NO', 'DE']
+    country_names = ['Ireland', 'Denmark', 'France', 'Netherlands', 'Belgium', 'Norway', 'Germany']
 
     # 3 & 4. Query ENTSO-E to fill gaps or all if local file is not covering the date range
     entsoe_start = date_range_utc[0]
@@ -495,6 +495,7 @@ def build_europe_day_ahead_prices(date_range):
         'NL': 'Netherlands',
         'BE': 'Belgium',
         'NO_2_NSL': 'Norway',
+        'DE_LU': 'Germany',
     }
 
     # 3 & 4. Query ENTSO-E to fill gaps or all if local file is not covering the date range
