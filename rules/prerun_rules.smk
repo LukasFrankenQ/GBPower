@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 rule build_2030_marginal_price_data:
     input:
-        "data/MMStandardOutputFile_NT2030_Plexos_CY2009_2.5_v40.xlsx",
+        # "data/MMStandardOutputFile_NT2030_Plexos_CY2009_2.5_v40.xlsx",
     output:
         "data/prerun/europe_avg_day_ahead_prices_2030.csv",
     resources:
