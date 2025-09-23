@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: : 2024 Lukas Franken
+# SPDX-FileCopyrightText: : 2024-2025 Lukas Franken
 #
 # SPDX-License-Identifier: MIT
 
@@ -10,6 +10,21 @@
 # To run them, remove the `#` from the output of each rule.
 
 from datetime import datetime, timedelta
+
+
+rule build_2030_marginal_price_data:
+    input:
+        "data/MMStandardOutputFile_NT2030_Plexos_CY2009_2.5_v40.xlsx",
+    output:
+        "data/prerun/europe_avg_day_ahead_prices_2030.csv",
+    resources:
+        mem_mb=8000,
+    log:
+        "../logs/2030_marginal_price_data.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../prerun_scripts/build_2030_marginal_price_data.py"
 
 
 rule build_europe_day_ahead_prices:
