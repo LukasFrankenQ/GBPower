@@ -91,19 +91,22 @@ rule solve_network:
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
         transmission_boundaries='data/transmission_boundaries.yaml',
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
+        fleet_2024="data/gb_2024_capacities.csv",
+        marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
+        future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
     output:
-        network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
-        network_national="results/{day}/network_{ic}_s_national_solved.nc",
-        network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
-        network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
-        network_rnp1="results/{day}/network_{ic}_s_rnp1_solved.nc",
-        network_rnp2="results/{day}/network_{ic}_s_rnp2_solved.nc",
-        network_rnp3="results/{day}/network_{ic}_s_rnp3_solved.nc",
+        network_nodal="results/{day}/network_{ic}_s_f{future}_nodal_solved.nc",
+        network_national="results/{day}/network_{ic}_s_f{future}_national_solved.nc",
+        network_national_redispatch="results/{day}/network_{ic}_s_f{future}_national_solved_redispatch.nc",
+        network_zonal="results/{day}/network_{ic}_s_f{future}_zonal_solved.nc",
+        network_zonal_redispatch="results/{day}/network_{ic}_s_f{future}_zonal_solved_redispatch.nc",
+        network_rnp1="results/{day}/network_{ic}_s_f{future}_rnp1_solved.nc",
+        network_rnp2="results/{day}/network_{ic}_s_f{future}_rnp2_solved.nc",
+        network_rnp3="results/{day}/network_{ic}_s_f{future}_rnp3_solved.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_{ic}_solved.log",  
+        "../logs/networks/{day}_{ic}_f{future}_solved.log",  
     conda:
         "../envs/environment.yaml"
     script:

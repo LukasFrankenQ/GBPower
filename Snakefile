@@ -17,7 +17,7 @@ wildcard_constraints:
     day=r"\d{4}-\d{2}-\d{2}",
     layout=r"national|zonal|nodal",
     ic=r"flex",
-    design=r"[a-z]+[2-3][0-9]{3}",
+    future=r"off|202[5-9]|2030",
 
 configfile: "config.yaml"
 
