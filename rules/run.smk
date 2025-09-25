@@ -80,6 +80,57 @@ rule cluster_network:
         "../scripts/cluster_network.py"
 
 
+rule calibrate_line_capacities:
+    params:
+        solver=config['solver'],
+    input:
+        bmus="data/prerun/prepared_bmus.csv",
+        bids="data/base/{day}/bids.csv",
+        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
+        network_national="results/{day}/network_{ic}_s_national.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        transmission_boundaries='data/transmission_boundaries.yaml',
+        boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
+    output:
+        calibration_factor="results/{day}/calibration_factor_{ic}.yaml",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/networks/{day}_{ic}_calibrated.log",  
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/calibrate_line_capacities.py"
+
+
+rule prepare_future_network:
+    input:
+        calibration_factor="results/{day}/calibration_factor_{ic}.yaml",
+        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
+        network_national="results/{day}/network_{ic}_s_national.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        fleet_2024="data/gb_2024_capacities.csv",
+        ar4_results="data/prerun/ar4_results.csv",
+        ar5_results="data/prerun/ar5_results.csv",
+        ar6_results="data/prerun/ar6_results.csv",
+        marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
+        future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
+        cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
+    output:
+        network_nodal="results/{day}/network_{ic}_s_nodal_future{future}.nc",
+        network_national="results/{day}/network_{ic}_s_national_future{future}.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_future{future}.nc",
+        cfd_strike_prices="results/{day}/cfd_strike_prices_{ic}_future{future}.csv",
+    resources:
+        mem_mb=1500,
+    log:
+        "../logs/networks/{day}_{ic}_future{future}.log",  
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/prepare_future_network.py"
+
+
 rule solve_network:
     params:
         solver=config['solver'],
@@ -91,9 +142,6 @@ rule solve_network:
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
         transmission_boundaries='data/transmission_boundaries.yaml',
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
-        fleet_2024="data/gb_2024_capacities.csv",
-        marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
-        future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
     output:
         network_nodal="results/{day}/network_{ic}_s_f{future}_nodal_solved.nc",
         network_national="results/{day}/network_{ic}_s_f{future}_national_solved.nc",
@@ -111,3 +159,4 @@ rule solve_network:
         "../envs/environment.yaml"
     script:
         "../scripts/solve_network.py"
+
