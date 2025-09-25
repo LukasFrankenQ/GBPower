@@ -1,0 +1,5 @@
+name,lon_start,lat_start,lon_end,lat_end,p_nom,first_operational_year,source
+Hinkley Point (Shurton) – Seabank 400 kV double-circuit (Hinkley Connection Project),-3.130424,51.208559,-2.67,51.5392,4000,2025,https://www.nationalgrid.com/electricity-transmission/network-and-infrastructure/hinkley-connection
+Bramford – Twinstead Tee 400 kV reinforcement (new double-circuit & partial undergrounding),1.06092,52.07124,0.710512,51.997128,4000,2029,https://www.nationalgrid.com/the-great-grid-upgrade/bramford-to-twinstead
+Overton (York North) – Monk Fryston reinforcement (Yorkshire GREEN 275/400 kV works),-1.156076,54.003644,-1.26711,53.75584,2000,2028,https://www.nationalgrid.com/the-great-grid-upgrade/yorkshire-green
+Kintore – Tealing (Emmock) via Hurlie 400 kV double-circuit (SSEN East Coast 400 kV),-2.38145,57.21875,-2.9779,56.52128,4000,2030,https://www.ssen-transmission.co.uk/projects/project-map/kintore-tealing-400kv-ohl-connection/
