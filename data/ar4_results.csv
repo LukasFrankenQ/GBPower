@@ -1,0 +1,23 @@
+Project Name,Region,Applicant,Technology Type,Size(MW),Strike Price(£/MWh),Delivery Year,No. of Phases,Pot,Longitude,Latitude
+Cumberhead West,Scotland,CUMBERHEAD WEST WIND FARM LTD.,Onshore Wind (>5MW),119.70,42.47,2024/25,1,1,-3.8875,55.599
+Arecleoch Wind Farm Extension,Scotland,SCOTTISHPOWER RENEWABLES (UK) LIMITED,Onshore Wind (>5MW),74.10,42.47,2024/25,1,1,-4.7971,55.0688
+Kilgallioch windfarm extension,Scotland,SCOTTISHPOWER RENEWABLES (UK) LIMITED,Onshore Wind (>5MW),51.30,42.47,2024/25,1,1,-4.808861,55.002999
+Stranoch Wind Farm,Scotland,STRANOCH WIND FARM LIMITED,Onshore Wind (>5MW),99.96,42.47,2024/25,1,1,-4.8862,54.9995
+North Kyle Energy Project,Scotland,NORTH KYLE WIND FARM LIMITED,Onshore Wind (>5MW),212.00,42.47,2024/25,1,1,-4.3597,55.3517
+Hagshaw Hill Repowering,Scotland,HAGSHAW HILL REPOWERING LTD,Onshore Wind (>5MW),79.80,42.47,2024/25,1,1,-3.921167,55.554833
+Broken Cross Wind Farm,Scotland,BROKEN CROSS WIND FARM LIMITED,Onshore Wind (>5MW),48.00,42.47,2024/25,1,1,-3.8162,55.6045
+Douglas West Extension,Scotland,DOUGLAS WEST EXTENSION LTD,Onshore Wind (>5MW),71.50,42.47,2024/25,1,1,-3.8901,55.5874
+High Constellation Wind Farm,Scotland,HIGH CONSTELLATION WINDFARM LIMITED,Onshore Wind (>5MW),50.00,42.47,2024/25,1,1,-5.487,55.7029
+Chirmorie Wind Farm,Scotland,CHIRMORIE WIND FARM LIMITED,Onshore Wind (>5MW),81.60,42.47,2024/25,1,1,-4.7815,55.0815
+TwinHub Floating Offshore Wind Project,England,WAVE HUB LIMITED,Floating Offshore Wind,32.00,87.30,2026/27,1,2,-5.611,50.364
+Stornoway Wind Farm,Scotland,STORNOWAY WIND FARM LIMITED,Remote Island Wind (RIW),200.00,46.39,2026/27,1,2,-6.3833,58.2194
+Orkney Community Wind Farm Project - Hoy,Scotland,Orkney Islands Council,Remote Island Wind (RIW),28.80,46.39,2026/27,1,2,-3.2491,58.826
+Orkney Community Wind Farm Project - Quanterness,Scotland,Orkney Islands Council,Remote Island Wind (RIW),28.80,46.39,2026/27,1,2,-3.0175,59.0055
+Mossy Hill,Scotland,PEEL NRE WIND FARMS (NO. 1) LIMITED,Remote Island Wind (RIW),48.00,46.39,2026/27,1,2,-1.2109,60.1601
+Beaw Field,Scotland,PEEL NRE WIND FARMS (YELL) LIMITED,Remote Island Wind (RIW),72.00,46.39,2026/27,1,2,-1.0827,60.5193
+Viking Wind Farm,Scotland,Viking Energy Wind Farm LLP,Remote Island Wind (RIW),220.00,46.39,2026/27,1,2,-1.2208,60.3066
+Inch Cape Phase 1,Scotland,INCH CAPE OFFSHORE LIMITED,Offshore Wind,1080.00,37.35,2026/27,1,3,-2.194972,56.49
+EA3 Phase 1,England,EAST ANGLIA THREE LIMITED,Offshore Wind,1372.34,37.35,2026/27,1,3,2.859972,52.7
+Norfolk Boreas (Phase 1),England,NORFOLK BOREAS LIMITED,Offshore Wind,1396.00,37.35,2026/27,1,3,2.552,52.6196
+Hornsea Project Three Offshore Wind Farm,England,ORSTED HORNSEA PROJECT THREE (UK) LIMITED,Offshore Wind,2852.00,37.35,2026/27,1,3,1.33,53.92
+Moray West Offshore Wind Farm,Scotland,MORAY OFFSHORE WINDFARM (WEST) LIMITED,Offshore Wind,294.00,37.35,2026/27,1,3,-2.988,58.094
