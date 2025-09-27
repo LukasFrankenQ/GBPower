@@ -105,26 +105,45 @@ rule calibrate_line_capacities:
 
 rule prepare_future_network:
     input:
-        calibration_factor="results/{day}/calibration_factor_{ic}.yaml",
-        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
-        network_national="results/{day}/network_{ic}_s_national.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        # if day wildcard is >2025-01-01, 2024 data is used for the inputs
+        # Use lambda function to check date and modify input day if needed
+        calibration_factor=lambda wildcards: "results/{}/calibration_factor_{}.yaml".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
+        network_nodal=lambda wildcards: "results/{}/network_{}_s_nodal.nc".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
+        network_national=lambda wildcards: "results/{}/network_{}_s_national.nc".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
+        network_zonal=lambda wildcards: "results/{}/network_{}_s_zonal.nc".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
+        base_network="results/{}/network_{}_s.nc".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
         fleet_2024="data/gb_2024_capacities.csv",
         ar4_results="data/prerun/ar4_results.csv",
         ar5_results="data/prerun/ar5_results.csv",
         ar6_results="data/prerun/ar6_results.csv",
         marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
         future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
+        future_transmission_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
     output:
-        network_nodal="results/{day}/network_{ic}_s_nodal_future{future}.nc",
-        network_national="results/{day}/network_{ic}_s_national_future{future}.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal_future{future}.nc",
-        cfd_strike_prices="results/{day}/cfd_strike_prices_{ic}_future{future}.csv",
+        network_nodal="results/{day}/network_{ic}_s_nodal_fut.nc",
+        network_national="results/{day}/network_{ic}_s_national_fut.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_fut.nc",
+        cfd_strike_prices="results/{day}/cfd_strike_prices_{ic}_fut.csv",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_{ic}_future{future}.log",  
+        "../logs/networks/{day}_{ic}_fut.log",  
     conda:
         "../envs/environment.yaml"
     script:
@@ -142,6 +161,10 @@ rule solve_network:
         network_zonal="results/{day}/network_{ic}_s_zonal.nc",
         transmission_boundaries='data/transmission_boundaries.yaml',
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
+        calibration_factor=lambda wildcards: "results/{}/calibration_factor_{}.yaml".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
     output:
         network_nodal="results/{day}/network_{ic}_s_f{future}_nodal_solved.nc",
         network_national="results/{day}/network_{ic}_s_f{future}_national_solved.nc",

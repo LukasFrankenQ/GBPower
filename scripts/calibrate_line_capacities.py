@@ -13,9 +13,13 @@ import pandas as pd
 import networkx as nx
 
 from tabulate import tabulate
-from _helpers import configure_logging, set_nested_attr
 from summarize_system_cost import get_bidding_volume
-from solve_network import safe_solve
+from _helpers import configure_logging, set_nested_attr
+from solve_network import (
+    safe_solve,
+    freeze_interconnector_commitments,
+    freeze_battery_commitments
+)
 
 
 def insert_flow_constraints(
@@ -89,7 +93,7 @@ def get_line_grouping(
     """
 
     boundary_assignments = {}
-    
+
     # 1) Build a graph of the entire network
     G = nx.Graph()
     
@@ -150,3 +154,171 @@ def tune_line_capacities(n, factor):
     '''
     assert n.lines.empty, 'Current setup is for full DC approximation.'
     n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= factor
+
+
+if __name__ == '__main__':
+
+    logger.warning('Relaxation factors for zonal and nodal should start at national redispatch relaxation factor')
+
+    configure_logging(snakemake)
+
+    solver_name = snakemake.params['solver']
+    
+    idx = pd.IndexSlice
+
+    bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
+    bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
+
+    bmus = bmus.loc[bmus['lat'] != 'distributed']
+    bmus['lat'] = bmus['lat'].astype(float)
+
+    bids = bids.loc[idx[:, 'vol'], :].sum()
+    bids.index = bids.index.get_level_values(0)
+
+    # select bmus that are likely to curtail due to grid congestion
+    renewable_bmus = bmus[
+        bmus.carrier.isin(['onwind', 'offwind', 'hydro', 'cascade'])
+        ].index
+    thermal_bmus = bmus[
+        (bmus.carrier.isin(['fossil', 'biomass', 'coal'])) & 
+        (bmus['lat'] > 55.3)
+    ].index
+
+    bid_counting_units = renewable_bmus.union(thermal_bmus)
+
+    # Get total daily bidding volume for these generators
+    daily_volume = bids.loc[
+        bids.index.intersection(bid_counting_units)
+        ].sum()
+
+    flow_constraints = pd.read_csv(
+        snakemake.input['boundary_flow_constraints'],
+        index_col=0,
+        parse_dates=True
+    )
+
+    with open(snakemake.input['transmission_boundaries']) as f:
+        boundaries = yaml.safe_load(f)
+
+    # provides the name of one bus within the cluster of buses around transmission boundaries
+    # In a transmission network where the transmission lines that constitute the boundary
+    # are removed all buses that are in the same network graph as the anchor buses are assigned
+    # as the regional interpretation of the boundaries.
+    # I.e. for instance all lines in Scotland north of SSE-SP have the same thermal constraints
+    # applied to them as the boundary itself.
+    anchors = {
+        'SSE-SP': ['6441'],
+        'SCOTEX': ['5912'],
+        'SSHARN': ['5946'],
+        'FLOWSTH': ['6010', '5250'],
+        'SEIMP': ['4977'],
+    }
+
+    logger.warning('Currently calibration unaware if tuning lines or links.')
+
+    # national market does not need transmission calibration
+    n_national = pypsa.Network(snakemake.input['network_national'])
+    # n_nodal = pypsa.Network(snakemake.input['network_nodal'])
+    n_zonal = pypsa.Network(snakemake.input['network_zonal'])
+
+    groupings = get_line_grouping(
+        n_nodal.buses, 
+        n_nodal.links.loc[n_nodal.links.carrier != 'interconnector', :],
+        boundaries,
+        anchors
+        )
+
+    # args = (flow_constraints, boundaries, calibration_parameters, groupings)
+    args = (flow_constraints, boundaries, groupings)
+
+    n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+    n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+
+    assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
+
+    insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
+    insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
+    # insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
+    insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
+
+    tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
+
+    print('\n\nstarting line calibration based on national model\n\n')
+    status, _ = n_national.optimize(solver_name=solver_name)
+    n_national.export_to_netcdf(snakemake.output['network_national'])
+
+    freeze_battery_commitments(n_national, n_national_redispatch)
+
+    if snakemake.wildcards.ic == 'flex':
+        logger.info('Freezing interconnector commitments')
+        freeze_interconnector_commitments(n_national, n_national_redispatch)
+
+    # the following loop ensures that modelled balancing volume matches actual balancing volume
+    tuned = False
+    counter = 0
+
+    # Initialize binary search bounds
+    left = 0.5  # minimum reasonable scaling factor
+    right = 2.0 # maximum reasonable scaling factor
+
+    unsolvable_case = False # special case deals with matching balancing volume is not possible for feasible model
+
+    while not tuned:
+        # Try the midpoint of the current range
+        if not unsolvable_case:
+            line_scaling_factor = (left + right) / 2
+
+        hold_redispatch = n_national_redispatch.copy()
+        tuned_line_capacities = tune_line_capacities(hold_redispatch, line_scaling_factor)
+        status, _ = hold_redispatch.optimize(solver_name=solver_name)
+
+        if status == 'ok':
+            balancing_volume = get_bidding_volume(n_national, hold_redispatch).sum()
+            error = abs(balancing_volume - daily_volume)
+
+            if error <= tolerance * daily_volume:
+                tuned = True
+
+            elif unsolvable_case:
+                tuned = True
+
+            else:
+                # Update binary search bounds based on whether we need more or less capacity
+                if balancing_volume > daily_volume:
+                    # Too much balancing volume - need to increase line capacity
+                    left = line_scaling_factor
+                else:
+                    # Too little balancing volume - need to decrease line capacity  
+                    right = line_scaling_factor
+        else:
+            # If infeasible, need more line capacity
+            if not unsolvable_case:
+                left = line_scaling_factor
+            else:
+                line_scaling_factor += 0.02
+
+        counter += 1
+        if status == 'ok' and right - left < 0.01:  # Convergence check
+            tuned = True
+        elif status == 'warning' and right - left < 0.01:
+            unsolvable_case = True
+
+        counter += 1
+        if counter > 100:
+            raise Exception('Failed to tune line capacities')
+
+        if status == 'ok':
+            logger.info(f'Received balancing volume {balancing_volume:.2f} with line scaling factor {line_scaling_factor:.2f}')
+        else:
+            logger.info(f'Model infeasible with line scaling factor {line_scaling_factor:.2f}')
+
+        # solved first such that line relaxation factor can also be applied to the other models
+        # status, relaxation_factor = safe_solve(n_national_redispatch)
+
+    print('=============================================================================')
+    logger.info(f'Successfully tuned line capacities after {counter} iterations and a line scaling factor of {line_scaling_factor:.2f}')
+    logger.info(f'Modelled balancing volume: {balancing_volume*1e-3:.2f} GWh, actual balancing volume: {daily_volume*1e-3:.2f} GWh')
+    print('=============================================================================')
+
+    with open(snakemake.output['calibration_factor'], 'w') as f:
+        yaml.dump({'calibration_factor': line_scaling_factor}, f)
