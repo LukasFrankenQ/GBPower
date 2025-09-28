@@ -1,10 +1,10 @@
 2022_model: 247 # TWh, value obtained from model, aligns with method from ESPENI dataset
 2023_model: 246 # TWh, value obtained from model, aligns with method from ESPENI dataset
 2024_model: 250.6 # TWh, value obtained from model, aligns with method from ESPENI dataset
-2024: 266.4 # TWh, NESO Clean Power 2030 – Annex 1 (GB consumer electricity demand; 263 TWh in 2023 rising ~11% to ~287 TWh by 2030; linear interpolation used for intervening years)
-2025: 269.9 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
-2026: 273.3 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
-2027: 276.7 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
-2028: 280.1 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
-2029: 283.6 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
-2030: 287.0 # TWh, NESO Clean Power 2030 – Annex 1 (2030 GB consumer demand ≈287 TWh; use as export-cleaned generation proxy when losses aren't modelled)
+2024_neso: 266.4 # TWh, NESO Clean Power 2030 – Annex 1 (GB consumer electricity demand; 263 TWh in 2023 rising ~11% to ~287 TWh by 2030; linear interpolation used for intervening years)
+2025_neso: 269.9 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
+2026_neso: 273.3 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
+2027_neso: 276.7 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
+2028_neso: 280.1 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
+2029_neso: 283.6 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
+2030_neso: 287.0 # TWh, NESO Clean Power 2030 – Annex 1 (2030 GB consumer demand ≈287 TWh; use as export-cleaned generation proxy when losses aren't modelled)
