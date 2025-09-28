@@ -232,7 +232,7 @@ def adjust_to_future_year(
             p_max_pu=p_max_pu,
             marginal_cost=0,
         )
-    
+
     ##### Batteries
 
     installed_capacity = current_fleet.loc['Battery storage (BESS)', 'Installed_Capacity_GW']
