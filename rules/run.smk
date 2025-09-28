@@ -123,17 +123,17 @@ rule prepare_future_network:
             wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
             else wildcards.day.replace(wildcards.day[:4], "2024"),
             wildcards.ic),
-        base_network="results/{}/network_{}_s.nc".format(
+        base_network=lambda wildcards: "results/{}/network_{}_s.nc".format(
             wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
             else wildcards.day.replace(wildcards.day[:4], "2024"),
             wildcards.ic),
         fleet_2024="data/gb_2024_capacities.csv",
-        ar4_results="data/prerun/ar4_results.csv",
-        ar5_results="data/prerun/ar5_results.csv",
-        ar6_results="data/prerun/ar6_results.csv",
+        ar4_results="data/ar4_results.csv",
+        ar5_results="data/ar5_results.csv",
+        ar6_results="data/ar6_results.csv",
         marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
         future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
-        future_transmission_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
+        future_transmission_additions="data/GB_onshore_transmission_additions_2025_2030.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
     output:
         network_nodal="results/{day}/network_{ic}_s_nodal_fut.nc",

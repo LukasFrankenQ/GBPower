@@ -178,8 +178,8 @@ def adjust_to_future_year(
     ##### Wind #####
 
     current_capacities = {
-        'onwind': fleet.loc['Onshore wind', 'Installed_Capacity_GW'] * 1000,
-        'offwind': fleet.loc['Offshore wind', 'Installed_Capacity_GW'] * 1000,
+        'onwind': current_fleet.loc['Onshore wind', 'Installed_Capacity_GW'] * 1000,
+        'offwind': current_fleet.loc['Offshore wind', 'Installed_Capacity_GW'] * 1000,
     }
 
     network_capacities = {
@@ -235,7 +235,7 @@ def adjust_to_future_year(
     
     ##### Batteries
 
-    installed_capacity = fleet.loc['Battery storage (BESS)', 'Installed_Capacity_GW']
+    installed_capacity = current_fleet.loc['Battery storage (BESS)', 'Installed_Capacity_GW']
 
     new_assets = future_assets.loc[
         (future_assets.Year <= year) &
@@ -323,27 +323,26 @@ if __name__ == '__main__':
         cfd_strike_prices.to_csv(snakemake.output['cfd_strike_prices'])
         sys.exit()
 
-    existing_fleet = pd.read_csv(
+    current_fleet = pd.read_csv(
         snakemake.input['fleet_2024'],
         index_col=0
     )
 
     future_system_additions = pd.read_csv(
-        snakemake.input['future_system_additions'],
-        index_col=0
+        snakemake.input['future_system_additions']
     )
 
     # preprocess CfD results from AR4, AR5, AR6
 
     # csv version of the main table from (reasoning for focus on wind is given in the paper)
     # https://assets.publishing.service.gov.uk/media/65b1463d160765000d18f834/contracts-for-difference-cfd-allocation-round-4-results.pdf
-    ar4 = pd.read_csv(Path.cwd().parent / 'data' / 'ar4_results.csv', index_col=0)
+    ar4 = pd.read_csv(snakemake.input['ar4_results'], index_col=0)
     # csv version of the main table from
     # https://assets.publishing.service.gov.uk/media/64fa0473fdc5d10014fce820/cfd-ar5-results.pdf
-    ar5 = pd.read_csv(Path.cwd().parent / 'data' / 'ar5_results.csv', index_col=0)
+    ar5 = pd.read_csv(snakemake.input['ar5_results'], index_col=0)
     # csv version of the main table from
     # https://assets.publishing.service.gov.uk/media/66d6ad7c6eb664e57141db4b/Contracts_for_Difference_Allocation_Round_6_results.pdf
-    ar6 = pd.read_csv(Path.cwd().parent / 'data' / 'ar6_results.csv', index_col=0)
+    ar6 = pd.read_csv(snakemake.input['ar6_results'], index_col=0)
 
     ar4 = ar4.rename(columns={'Strike Price(£/MWh)': 'Strike Price (£/MWh)', 'Size(MW)': 'Size (MW)'})
     ar5 = ar5.rename(columns={'ProjectLocation': 'Project Location'})
@@ -370,10 +369,6 @@ if __name__ == '__main__':
     for unit in future_wind_generators.index:
         cfd_strike_prices.loc[unit, :] = future_wind_generators.loc[unit, 'Strike Price (£/MWh)']
 
-    n = pypsa.Network(
-        snakemake.input['network_national']
-    )
-
     base_n = pypsa.Network(
         snakemake.input['base_network']
     )
@@ -386,15 +381,15 @@ if __name__ == '__main__':
     for layout in ['nodal', 'zonal', 'national']:
 
         future_n = adjust_to_future_year(
-            eval(f'{layout}_n'),
-            snakemake.wildcards.future,
-            existing_fleet,
+            globals()[f'{layout}'],
+            snakemake.wildcards.day[:4],
+            current_fleet,
             future_wind_generators,
             future_system_additions,
             future_onshore_line_upgrades,
             base_n,
         )
 
-        future_n.export_to_netcdf(snakemake.output[f'network_{layout}_fut'])
+        future_n.export_to_netcdf(snakemake.output[f'network_{layout}'])
     
     cfd_strike_prices.to_csv(snakemake.output['cfd_strike_prices'])

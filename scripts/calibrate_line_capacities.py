@@ -217,9 +217,9 @@ if __name__ == '__main__':
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
     # national market does not need transmission calibration
+    n_nodal = pypsa.Network(snakemake.input['network_nodal'])
     n_national = pypsa.Network(snakemake.input['network_national'])
-    # n_nodal = pypsa.Network(snakemake.input['network_nodal'])
-    n_zonal = pypsa.Network(snakemake.input['network_zonal'])
+    # n_zonal = pypsa.Network(snakemake.input['network_zonal'])
 
     groupings = get_line_grouping(
         n_nodal.buses, 
@@ -232,20 +232,20 @@ if __name__ == '__main__':
     args = (flow_constraints, boundaries, groupings)
 
     n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
-    n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
+    # n_zonal_redispatch = pypsa.Network(snakemake.input['network_nodal'])
 
     assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
     insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
     insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
     # insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
-    insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
+    # insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
 
     tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
 
     print('\n\nstarting line calibration based on national model\n\n')
     status, _ = n_national.optimize(solver_name=solver_name)
-    n_national.export_to_netcdf(snakemake.output['network_national'])
+    # n_national.export_to_netcdf(snakemake.output['network_national'])
 
     freeze_battery_commitments(n_national, n_national_redispatch)
 
