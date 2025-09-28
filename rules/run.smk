@@ -135,6 +135,7 @@ rule prepare_future_network:
         future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
         future_transmission_additions="data/GB_onshore_transmission_additions_2025_2030.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
+        future_electricity_demand="data/gb_electricity_loads.yaml",
     output:
         network_nodal="results/{day}/network_{ic}_s_nodal_fut.nc",
         network_national="results/{day}/network_{ic}_s_national_fut.nc",

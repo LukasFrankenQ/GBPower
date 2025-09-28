@@ -322,6 +322,14 @@ if __name__ == '__main__':
         national.export_to_netcdf(snakemake.output['network_national'])
         cfd_strike_prices.to_csv(snakemake.output['cfd_strike_prices'])
         sys.exit()
+    
+    with open(snakemake.input['future_electricity_demand'], 'r') as f:
+        future_loads = yaml.safe_load(f)
+
+    load_scaling_factor = (
+        future_loads[f'{snakemake.wildcards.day[:4]}_neso'] /
+        future_loads['2024_neso']
+    )
 
     current_fleet = pd.read_csv(
         snakemake.input['fleet_2024'],
@@ -380,8 +388,13 @@ if __name__ == '__main__':
 
     for layout in ['nodal', 'zonal', 'national']:
 
+        future_n = globals()[f'{layout}']
+
+        gb_loads = future_n.loads.loc[n.loads.carrier == 'electricity'].index
+        future_n.loads_t.p_set.loc[:, gb_loads] *= load_scaling_factor
+
         future_n = adjust_to_future_year(
-            globals()[f'{layout}'],
+            future_n,
             snakemake.wildcards.day[:4],
             current_fleet,
             future_wind_generators,
