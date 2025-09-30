@@ -32,6 +32,38 @@ rule build_europe_day_ahead_prices:
         raise ValueError("This rule is not implemented yet.")
 
 
+rule build_europe_day_ahead_averages:
+    input:
+        # Builds avg Europe day ahead prices
+        # but requires 350 days
+        lambda wildcards: (
+            lambda glob: (
+                lambda files: (
+                    files if len(files) >= 350 else
+                    (_ for _ in ()).throw(
+                        Exception(
+                            f"Not enough data downloaded in directory 'data/base/'. "
+                            f"Expected at least 300 days of data, found {len(files)}."
+                            f"Use the rule 'build_base' to download more data."
+                        )
+                    )
+                )
+            )(glob.glob("data/base/*"))
+        )(
+            __import__('glob')
+        ),
+    output:
+        # "data/prerun/europe_day_ahead_averages.csv"
+    resources:
+        mem_mb=4000,
+    log:
+        "../logs/europe_price_averages.log",
+    conda:
+        "../envs/environment.yaml",
+    script:
+        "../prerun_scripts/build_europe_price_averages.py"
+
+
 rule build_roc_values:
     input:
         # Builds estimated ROC values for whichever days are available.

@@ -41,3 +41,4 @@ countries_cost_slopes: # data-driven values taken from Fig 3 in Mendes et al. (2
   Ireland: 5.5 # EUR/GW (copied value from DK, and scaled by population; data missing in paper)
   Netherlands: 4.00 # EUR/GW
   Norway: 1.85 # EUR/GW
+  Germany: 1.04 # EUR/GW

@@ -474,7 +474,6 @@ def add_interconnectors(
             link_kwargs = {
                 'bus1': gb_bus,
                 }
-
             
             rr = flow.diff().dropna().abs().max()
             link_kwargs.update({

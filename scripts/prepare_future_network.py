@@ -28,6 +28,7 @@ import networkx as nx
 from pyproj import Transformer
 
 from _helpers import configure_logging
+from _timeseries_helpers import transform_prices_to_target_mean
 
 
 # Set up transformer from OSGB36 / British National Grid to WGS84 lat/lon
@@ -98,6 +99,10 @@ def adjust_to_future_year(
     future_assets,
     future_onshore_line_upgrades,
     base,
+    europe_day_ahead_prices,
+    country_coords,
+    countries_cost_slopes,
+    meritorder_slope_factors,
     ):
 
     n = n.copy()
@@ -304,6 +309,136 @@ def adjust_to_future_year(
                 **kwargs
             )
 
+    #### Interconnectors
+
+    ic_countries = {
+        'NeuConnect': 'Germany',
+        'LionLink': 'Netherlands',
+        'Greenlink': 'Ireland',
+    }
+
+    generator_steps = 20
+    ic_subset = future_assets.loc[
+        (future_assets.Year <= year) &
+        (future_assets.Department == 'Interconnector')
+        ]
+
+    for _, row in ic_subset.iterrows():
+
+        name = row['Asset_Name'].split(' ')[0]
+        logger.info(f"Adding interconnector {name}.")
+        country = ic_countries[name]
+
+        start = np.array([row.Start_Longitude, row.Start_Latitude])
+
+        distances = np.sqrt(
+            (buslocs['x'] - start[0])**2 + 
+            (buslocs['y'] - start[1])**2
+        )
+        bus1 = distances.idxmin()
+
+        if country in n.buses.index:
+            other_country_ic = n.links.index[n.links.bus0 == country][0]
+
+            # relative to existing capacity, how much is added by the new interconnector
+            country_gen = n.generators.index[n.generators.bus == country]
+            country_load = n.loads.index[n.loads.bus == country] 
+            country_ic_cap = n.generators.loc[country_gen, 'p_nom'].sum() / 2
+
+            scale_factor = (row['Capacity_MW'] + country_ic_cap) / country_ic_cap
+
+            n.loads.loc[country_load, 'p_set'] *= scale_factor
+
+            n.generators.loc[country_gen, 'p_nom'] *= scale_factor
+
+            mcs = n.generators_t['marginal_cost'].loc[:, country_gen]
+            avg_mc = mcs.mean(axis=1)
+
+            n.generators_t['marginal_cost'].loc[:, country_gen] += (mcs.subtract(avg_mc, axis=0)) * scale_factor
+
+            n.add(
+                'Link',
+                name,
+                bus0=country,
+                bus1=bus1,
+                carrier='interconnector',
+                efficiency=0.99,
+                p_nom=row['Capacity_MW'],
+                p_min_pu=-1.,
+                p_max_pu=1.,
+                ramp_limit_up=n.links.loc[other_country_ic, 'ramp_limit_up'],
+                ramp_limit_down=n.links.loc[other_country_ic, 'ramp_limit_down'],
+            )
+
+        else: # this only triggers for NeuConnect, a GB-Germany interconnector
+
+            country_lon = country_coords[country][0]
+            country_lat = country_coords[country][1]
+
+            n.add(
+                'Bus',
+                country,
+                carrier='electricity',
+                x=country_coords[country][0],
+                y=country_coords[country][1],
+                country=country,
+                )
+
+            m0 = europe_day_ahead_prices.loc[:, country]
+            m0.index = n.snapshots
+            print('warning! simplified slope conversion to £!')
+            s = countries_cost_slopes[country] / 1000 / 1.15 # convert to £/MW
+
+            month = n.snapshots[0].strftime('%Y-%m')
+            s *= meritorder_slope_factors.loc[month, 'factor_relative_to_2019']
+
+            ic_p_nom = row['Capacity_MW']
+            lower_cost_boundary = - s * ic_p_nom
+            upper_cost_boundary = s * ic_p_nom
+
+            cost_steps = np.linspace(
+                lower_cost_boundary,
+                upper_cost_boundary,
+                generator_steps).tolist()
+
+            step_capacity = ic_p_nom / generator_steps * 2
+
+            rru = n.links.loc[n.links.carrier == 'interconnector', 'ramp_limit_up'].mean()
+            rrd = n.links.loc[n.links.carrier == 'interconnector', 'ramp_limit_down'].mean()
+
+            for i, cost_step in enumerate(cost_steps):
+                n.add(
+                    "Generator",
+                    country.lower() + '_local_market_' + str(i),
+                    bus=country,
+                    p_nom=step_capacity,
+                    marginal_cost=m0 + cost_step,
+                    carrier="local_market",
+                )
+
+            n.add(
+                "Load",
+                country.lower() + '_local_market',
+                bus=country,
+                p_set=ic_p_nom,
+                carrier=country,
+                )
+
+            n.add(
+                'Link',
+                name,
+                bus0=country,
+                bus1=bus1,
+                carrier='interconnector',
+                efficiency=0.99,
+                p_nom=row['Capacity_MW'],
+                p_min_pu=-1,
+                p_max_pu=1,
+                ramp_limit_up=rru,
+                ramp_limit_down=rrd,
+            )
+
+
     return n
 
 
@@ -325,6 +460,22 @@ if __name__ == '__main__':
     
     with open(snakemake.input['future_electricity_demand'], 'r') as f:
         future_loads = yaml.safe_load(f)
+
+    europe_day_ahead_prices = pd.read_csv(snakemake.input['europe_day_ahead_prices'], index_col=0, parse_dates=True)
+
+    meritorder_slope_factors = pd.read_csv(
+        snakemake.input['meritorder_slope_factors'],
+        index_col=0
+        )
+    countries_cost_slopes = snakemake.params['countries_cost_slopes']
+    # fixes yaml related issue; NO for Norway translates to False in yaml
+    if False in list(countries_cost_slopes.keys()):
+        countries_cost_slopes['NO'] = countries_cost_slopes[False]
+        del countries_cost_slopes[False]
+
+    with open(snakemake.input['interconnection_helpers'], 'r') as f:
+        interconnection_helpers = yaml.safe_load(f)
+        country_coords = interconnection_helpers['country_coords']
 
     load_scaling_factor = (
         future_loads[f'{snakemake.wildcards.day[:4]}_neso'] /
@@ -390,7 +541,7 @@ if __name__ == '__main__':
 
         future_n = globals()[f'{layout}']
 
-        gb_loads = future_n.loads.loc[n.loads.carrier == 'electricity'].index
+        gb_loads = future_n.loads.loc[future_n.loads.carrier == 'electricity'].index
         future_n.loads_t.p_set.loc[:, gb_loads] *= load_scaling_factor
 
         future_n = adjust_to_future_year(
@@ -401,6 +552,10 @@ if __name__ == '__main__':
             future_system_additions,
             future_onshore_line_upgrades,
             base_n,
+            europe_day_ahead_prices,
+            country_coords,
+            countries_cost_slopes,
+            meritorder_slope_factors,
         )
 
         future_n.export_to_netcdf(snakemake.output[f'network_{layout}'])

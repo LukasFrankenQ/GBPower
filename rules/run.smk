@@ -104,6 +104,8 @@ rule calibrate_line_capacities:
 
 
 rule prepare_future_network:
+    params:
+        countries_cost_slopes=config['countries_cost_slopes'],
     input:
         # if day wildcard is >2025-01-01, 2024 data is used for the inputs
         # Use lambda function to check date and modify input day if needed
@@ -127,6 +129,10 @@ rule prepare_future_network:
             wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
             else wildcards.day.replace(wildcards.day[:4], "2024"),
             wildcards.ic),
+        europe_day_ahead_prices=lambda wildcards: "data/base/{}/europe_day_ahead_prices.csv".format(
+            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
+            else wildcards.day.replace(wildcards.day[:4], "2024"),
+            wildcards.ic),
         fleet_2024="data/gb_2024_capacities.csv",
         ar4_results="data/ar4_results.csv",
         ar5_results="data/ar5_results.csv",
@@ -136,6 +142,8 @@ rule prepare_future_network:
         future_transmission_additions="data/GB_onshore_transmission_additions_2025_2030.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         future_electricity_demand="data/gb_electricity_loads.yaml",
+        meritorder_slope_factors="data/prerun/meritorder_slope_factors.csv",
+        interconnection_helpers='data/interconnection_helpers.yaml',
     output:
         network_nodal="results/{day}/network_{ic}_s_nodal_fut.nc",
         network_national="results/{day}/network_{ic}_s_national_fut.nc",
