@@ -103,36 +103,25 @@ rule calibrate_line_capacities:
         "../scripts/calibrate_line_capacities.py"
 
 
+def fix_year(day):
+    y, m, d = map(int, day.split("-"))
+    if y >= 2025:
+        y = 2024
+    return f"{y:04d}-{m:02d}-{d:02d}"
+
+
 rule prepare_future_network:
     params:
         countries_cost_slopes=config['countries_cost_slopes'],
     input:
         # if day wildcard is >2025-01-01, 2024 data is used for the inputs
         # Use lambda function to check date and modify input day if needed
-        calibration_factor=lambda wildcards: "results/{}/calibration_factor_{}.yaml".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
-        network_nodal=lambda wildcards: "results/{}/network_{}_s_nodal.nc".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
-        network_national=lambda wildcards: "results/{}/network_{}_s_national.nc".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
-        network_zonal=lambda wildcards: "results/{}/network_{}_s_zonal.nc".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
-        base_network=lambda wildcards: "results/{}/network_{}_s.nc".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
-        europe_day_ahead_prices=lambda wildcards: "data/base/{}/europe_day_ahead_prices.csv".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
+        calibration_factor=lambda wc: f"results/{fix_year(wc.day)}/calibration_factor_{wc.ic}.yaml",
+        network_nodal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_nodal.nc",
+        network_national=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_national.nc",
+        network_zonal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_zonal.nc",
+        base_network=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s.nc",
+        europe_day_ahead_prices=lambda wc: f"data/base/{fix_year(wc.day)}/europe_day_ahead_prices.csv",
         fleet_2024="data/gb_2024_capacities.csv",
         ar4_results="data/ar4_results.csv",
         ar5_results="data/ar5_results.csv",
@@ -164,29 +153,26 @@ rule solve_network:
         solver=config['solver'],
     input:
         bmus="data/prerun/prepared_bmus.csv",
-        bids="data/base/{day}/bids.csv",
-        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
-        network_national="results/{day}/network_{ic}_s_national.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
+        network_nodal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_nodal.nc",
+        network_national=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_national.nc",
+        network_zonal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_zonal.nc",
         transmission_boundaries='data/transmission_boundaries.yaml',
-        boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv",
-        calibration_factor=lambda wildcards: "results/{}/calibration_factor_{}.yaml".format(
-            wildcards.day if datetime.strptime(wildcards.day, "%Y-%m-%d").date() < datetime.strptime("2025-01-01", "%Y-%m-%d").date()
-            else wildcards.day.replace(wildcards.day[:4], "2024"),
-            wildcards.ic),
+        boundary_flow_constraints=lambda wc: f"data/base/{fix_year(wc.day)}/boundary_flow_constraints.csv",
+        calibration_factor=lambda wc: f"results/{fix_year(wc.day)}/calibration_factor_{wc.ic}.yaml",
     output:
-        network_nodal="results/{day}/network_{ic}_s_f{future}_nodal_solved.nc",
-        network_national="results/{day}/network_{ic}_s_f{future}_national_solved.nc",
-        network_national_redispatch="results/{day}/network_{ic}_s_f{future}_national_solved_redispatch.nc",
-        network_zonal="results/{day}/network_{ic}_s_f{future}_zonal_solved.nc",
-        network_zonal_redispatch="results/{day}/network_{ic}_s_f{future}_zonal_solved_redispatch.nc",
-        network_rnp1="results/{day}/network_{ic}_s_f{future}_rnp1_solved.nc",
-        network_rnp2="results/{day}/network_{ic}_s_f{future}_rnp2_solved.nc",
-        network_rnp3="results/{day}/network_{ic}_s_f{future}_rnp3_solved.nc",
+        network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
+        network_national="results/{day}/network_{ic}_s_national_solved.nc",
+        network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
+        network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
+        network_rnp1="results/{day}/network_{ic}_s_rnp1_solved.nc",
+        network_rnp2="results/{day}/network_{ic}_s_rnp2_solved.nc",
+        network_rnp3="results/{day}/network_{ic}_s_rnp3_solved.nc",
     resources:
         mem_mb=1500,
     log:
-        "../logs/networks/{day}_{ic}_f{future}_solved.log",  
+        "../logs/networks/{day}_{ic}_solved.log",  
     conda:
         "../envs/environment.yaml"
     script:
