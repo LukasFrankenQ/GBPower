@@ -81,8 +81,6 @@ rule cluster_network:
 
 
 rule calibrate_line_capacities:
-    params:
-        solver=config['solver'],
     input:
         bmus="data/prerun/prepared_bmus.csv",
         bids="data/base/{day}/bids.csv",
@@ -149,8 +147,6 @@ rule prepare_future_network:
 
 
 rule solve_network:
-    params:
-        solver=config['solver'],
     input:
         bmus="data/prerun/prepared_bmus.csv",
         bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",

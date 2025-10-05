@@ -318,7 +318,7 @@ if __name__ == '__main__':
     tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
 
     print('\n\nstarting line calibration based on national model\n\n')
-    status, _ = n_national.optimize(solver_name=solver_name)
+    status, _ = n_national.optimize()
     # n_national.export_to_netcdf(snakemake.output['network_national'])
 
     freeze_battery_commitments(n_national, n_national_redispatch)
@@ -344,7 +344,7 @@ if __name__ == '__main__':
 
         hold_redispatch = n_national_redispatch.copy()
         tuned_line_capacities = tune_line_capacities(hold_redispatch, line_scaling_factor)
-        status, _ = hold_redispatch.optimize(solver_name=solver_name)
+        status, _ = hold_redispatch.optimize()
 
         if status == 'ok':
             balancing_volume = get_bidding_volume(n_national, hold_redispatch).sum()
