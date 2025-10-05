@@ -445,6 +445,9 @@ def adjust_to_future_year(
 
 if __name__ == '__main__':
 
+    configure_logging(snakemake)
+    logger.warning("\n YET TO ADJUST EUROPE WHOLESALE PRICES FOR FUTURE YEAR\n")
+
     nodal = pypsa.Network(snakemake.input['network_nodal'])
     zonal = pypsa.Network(snakemake.input['network_zonal'])
     national = pypsa.Network(snakemake.input['network_national'])
