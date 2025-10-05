@@ -15,8 +15,15 @@ import networkx as nx
 from tabulate import tabulate
 from _helpers import configure_logging, set_nested_attr
 from summarize_system_cost import get_bidding_volume
-from calibrate_line_capacities import get_line_grouping, insert_flow_constraints, tune_line_capacities, anchors
-
+from calibrate_line_capacities import (
+    get_line_grouping,
+    insert_flow_constraints,
+    tune_line_capacities,
+    anchors,
+    freeze_battery_commitments,
+    freeze_interconnector_commitments,
+    safe_solve
+)
 
 
 if __name__ == '__main__':
@@ -27,33 +34,6 @@ if __name__ == '__main__':
 
     solver_name = snakemake.params['solver']
     
-    idx = pd.IndexSlice
-
-    # bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
-    # bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
-
-    # bmus = bmus.loc[bmus['lat'] != 'distributed']
-    # bmus['lat'] = bmus['lat'].astype(float)
-
-    # bids = bids.loc[idx[:, 'vol'], :].sum()
-    # bids.index = bids.index.get_level_values(0)
-
-    # select bmus that are likely to curtail due to grid congestion
-    # renewable_bmus = bmus[
-    #     bmus.carrier.isin(['onwind', 'offwind', 'hydro', 'cascade'])
-    #     ].index
-    # thermal_bmus = bmus[
-    #     (bmus.carrier.isin(['fossil', 'biomass', 'coal'])) & 
-        # (bmus['lat'] > 55.3)
-    # ].index
-
-    # bid_counting_units = renewable_bmus.union(thermal_bmus)
-
-    # Get total daily bidding volume for these generators
-    # daily_volume = bids.loc[
-    #     bids.index.intersection(bid_counting_units)
-    #     ].sum()
-
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
         index_col=0,
@@ -61,13 +41,12 @@ if __name__ == '__main__':
     )
 
     with open(snakemake.input['transmission_boundaries']) as f:
-        boundaries = yaml.safe_load(f)
-    
+        boundaries = yaml.safe_load(f)['existing_boundaries']
+    with open(snakemake.input['transmission_boundaries']) as f:
+        future_boundary_additions = yaml.safe_load(f)['future_additions']
+
     with open(snakemake.input['calibration_factor']) as f:
         calibration_factor = yaml.safe_load(f)['calibration_factor']
-    print(calibration_factor)
-    import sys
-    sys.exit()
 
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
@@ -78,15 +57,15 @@ if __name__ == '__main__':
     n_nodal = pypsa.Network(snakemake.input['network_nodal'])
     n_zonal = pypsa.Network(snakemake.input['network_zonal'])
 
+    base_n_nodal = pypsa.Network(snakemake.input['network_base'])
 
     groupings = get_line_grouping(
-        n_nodal.buses, 
-        n_nodal.links.loc[n_nodal.links.carrier != 'interconnector', :],
+        base_n_nodal.buses, 
+        base_n_nodal.links.loc[n_nodal.links.carrier != 'interconnector', :],
         boundaries,
         anchors
         )
 
-    # args = (flow_constraints, boundaries, calibration_parameters, groupings)
     args = (flow_constraints, boundaries, groupings)
 
     n_national_redispatch = pypsa.Network(snakemake.input['network_nodal'])
@@ -94,10 +73,10 @@ if __name__ == '__main__':
 
     assert n_nodal.lines.empty, 'Current setup is for full DC approximation.'
 
-    insert_flow_constraints(n_national_redispatch, *args, model_name='national balancing')
-    insert_flow_constraints(n_nodal, *args, model_name='nodal wholesale')
-    insert_flow_constraints(n_zonal, *args, model_name='zonal wholesale')
-    insert_flow_constraints(n_zonal_redispatch, *args, model_name='zonal redispatch')
+    insert_flow_constraints(n_national_redispatch, *args, future_boundary_additions=future_boundary_additions, model_name='national balancing')
+    insert_flow_constraints(n_nodal, *args, future_boundary_additions=future_boundary_additions, model_name='nodal wholesale')
+    insert_flow_constraints(n_zonal, *args, future_boundary_additions=future_boundary_additions, model_name='zonal wholesale')
+    insert_flow_constraints(n_zonal_redispatch, *args, future_boundary_additions=future_boundary_additions, model_name='zonal redispatch')
 
     # RNP models
     # rnp1: IC have nodal price signal
@@ -126,33 +105,30 @@ if __name__ == '__main__':
         logger.info('Freezing interconnector commitments')
         freeze_interconnector_commitments(n_national, n_national_redispatch)
 
-    hold_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
+    status, _ = n_national_redispatch.optimize(solver_name=solver_name)
+    balancing_volume = get_bidding_volume(n_national, n_national_redispatch).sum()
+    n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 
     model_execution_overview.append(
         (
             'national redispatch',
             status,
-            str(np.around(line_scaling_factor, decimals=2)),
+            str(np.around(calibration_factor, decimals=2)),
             f'{balancing_volume*1e-3:.2f}'
         ) 
     )
 
     #################### Nodal market ####################
 
-    # status, relaxation_factor = safe_solve(n_nodal) # old way of doing it
-    # relax_line_capacities(n_nodal, relaxation_factor) # new way of doing it
-    # tune_line_capacities(n_nodal, line_scaling_factor)
-    # status, _ = n_nodal.optimize(solver_name=solver_name)
+    status, relaxation_factor = safe_solve(n_nodal, calibration_factor)
 
-    status, relaxation_factor = safe_solve(n_nodal, line_scaling_factor)
-
-    assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+    assert status == 'ok', f'Nodal wholesale model infeasible. Applied relax factor {calibration_factor:.2f}'
 
     model_execution_overview.append(
         (
             'nodal wholesale',
             status,
-            str(np.around(line_scaling_factor, decimals=2)),
+            str(np.around(calibration_factor, decimals=2)),
             '0.00'
         ) 
     )
@@ -177,10 +153,10 @@ if __name__ == '__main__':
     for model in ['rnp1', 'rnp2', 'rnp3']:
 
         n_rnp = globals()[model]
-        status, relaxation_factor = safe_solve(n_rnp, line_scaling_factor)
-        balancing_volume = get_bidding_volume(n_rnp, n_nodal).sum()
+        status, relaxation_factor = safe_solve(n_rnp, calibration_factor)
+        # balancing_volume = get_bidding_volume(n_rnp, n_nodal).sum()
 
-        assert status == 'ok', f'{nice_names[model]} model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+        assert status == 'ok', f'{nice_names[model]} model infeasible. Applied relax factor {calibration_factor:.2f}'
 
         globals()[model].export_to_netcdf(snakemake.output[f'network_{model}'])
 
@@ -188,22 +164,20 @@ if __name__ == '__main__':
             (
                 nice_names[model],
                 status,
-                str(np.around(line_scaling_factor, decimals=2)),
-                f'{balancing_volume*1e-3:.2f}'
+                str(np.around(calibration_factor, decimals=2)),
+                '-'
+                # f'{balancing_volume*1e-3:.2f}'
             ) 
         )
 
     #################### Zonal market ####################
 
-    # tune_line_capacities(n_zonal, line_scaling_factor)
-    # tune_line_capacities(n_zonal_redispatch, line_scaling_factor)
-
-    status, relaxation_factor = safe_solve(n_zonal, line_scaling_factor)
+    status, relaxation_factor = safe_solve(n_zonal, calibration_factor)
 
     # status, _ = n_zonal.optimize()
 
     # assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {relaxation_factor:.2f}'
-    assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+    assert status == 'ok', f'Zonal wholesale model infeasible. Applied relax factor {calibration_factor:.2f}'
 
     n_zonal.export_to_netcdf(snakemake.output['network_zonal'])
 
@@ -211,7 +185,7 @@ if __name__ == '__main__':
         (
             'zonal wholesale',
             status,
-            str(np.around(line_scaling_factor, decimals=2)),
+            str(np.around(calibration_factor, decimals=2)),
             '-'
         ) 
     )
@@ -224,9 +198,9 @@ if __name__ == '__main__':
     # relax_line_capacities(n_zonal_redispatch, relaxation_factor) # new way of doing it
     # status, _ = n_zonal_redispatch.optimize(solver_name=solver_name)
 
-    status, relaxation_factor = safe_solve(n_zonal_redispatch, line_scaling_factor)
+    status, relaxation_factor = safe_solve(n_zonal_redispatch, calibration_factor)
 
-    assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {line_scaling_factor:.2f}'
+    assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {calibration_factor:.2f}'
     n_zonal_redispatch.export_to_netcdf(snakemake.output['network_zonal_redispatch'])  
 
     balancing_volume = get_bidding_volume(n_zonal, n_zonal_redispatch).sum()
@@ -236,7 +210,7 @@ if __name__ == '__main__':
         (
             'zonal redispatch',
             status,
-            str(np.around(line_scaling_factor, decimals=2)),
+            str(np.around(calibration_factor, decimals=2)),
             f'{balancing_volume*1e-3:.2f}'
         ) 
     )

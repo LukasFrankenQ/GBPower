@@ -463,7 +463,7 @@ if __name__ == "__main__":
             ).sjoin(zonal_layout)
 
         with open(snakemake.input['transmission_boundaries']) as f:
-            boundaries = yaml.safe_load(f)
+            boundaries = yaml.safe_load(f)['existing_boundaries']
 
         boundary_lines = reduce(lambda x, y: x + y, list(boundaries.values()))
 
@@ -497,7 +497,6 @@ if __name__ == "__main__":
         country_names = list(yaml.safe_load(f)['country_coords'])
 
     network_countries = n.buses.index.intersection(country_names)
-    print('network_countries', network_countries)
     custom_busmap.drop(
         custom_busmap.index.intersection(network_countries),
         inplace=True

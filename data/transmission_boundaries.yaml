@@ -1,27 +1,37 @@
 # refers to lines in the nodal layout of the model
-SSE-SP:
-  - "13161"
-  - "6241"
-  - "6146"
-  - "6238"
-SCOTEX:
-  - "14109"
-  - "6139"
-  - "11758"
-  - "8009"
-SSHARN:
-  - "11778"
-  - "11780"
-  - "5225"
-  - "8009"
-SEIMP:
-  - "6121"
-  - "6120"
-  - "12746"
-  - "11742"
-FLOWSTH:
-  - "5203"
-  - "11528"
-  - "11764"
-  - "6203"
-  - "5207"
+existing_boundaries:
+  SSE-SP:
+    - "13161"
+    - "6241"
+    - "6146"
+    - "6238"
+  SCOTEX:
+    - "14109"
+    - "6139"
+    - "11758"
+    - "8009"
+  SSHARN:
+    - "11778"
+    - "11780"
+    - "5225"
+    - "8009"
+  SEIMP:
+    - "6121"
+    - "6120"
+    - "12746"
+    - "11742"
+  FLOWSTH:
+    - "5203"
+    - "11528"
+    - "11764"
+    - "6203"
+    - "5207"
+future_additions:
+  SSE-SP:
+    - "Kintore – Tealing (Emmock) via Hurlie 400 kV double-circuit (SSEN East Coast 400 kV)"
+  SCOTEX:
+    - "Eastern Green Link 1 (EGL1)"
+  SSHARN::
+    - "Eastern Green Link 2 (EGL2)"
+  SEIMP:
+    - "Sea Link (Suffolk–Kent)"

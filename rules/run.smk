@@ -154,9 +154,10 @@ rule solve_network:
     input:
         bmus="data/prerun/prepared_bmus.csv",
         bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
-        network_nodal="results/{day}/network_{ic}_s_nodal.nc",
-        network_national="results/{day}/network_{ic}_s_national.nc",
-        network_zonal="results/{day}/network_{ic}_s_zonal.nc",
+        network_base=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_nodal.nc",
+        network_nodal="results/{day}/network_{ic}_s_nodal_fut.nc",
+        network_national="results/{day}/network_{ic}_s_national_fut.nc",
+        network_zonal="results/{day}/network_{ic}_s_zonal_fut.nc",
         transmission_boundaries='data/transmission_boundaries.yaml',
         boundary_flow_constraints=lambda wc: f"data/base/{fix_year(wc.day)}/boundary_flow_constraints.csv",
         calibration_factor=lambda wc: f"results/{fix_year(wc.day)}/calibration_factor_{wc.ic}.yaml",

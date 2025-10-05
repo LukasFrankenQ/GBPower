@@ -55,7 +55,7 @@ def freeze_interconnector_commitments(n_from, n_to):
     into n_to, i.e. n_to HAS TO operate the respective interconnectors in the same
     way as n_from.
     '''
-    
+
     ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
     n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
 
@@ -65,7 +65,7 @@ def rstu(n):
         n.remove('StorageUnit', i)
 
 
-def safe_solve(n, factor=1):
+def safe_solve(n, factor=1, solver_name='highs'):
 
     status = 'not_solved'
     hold = n.copy()
@@ -92,6 +92,7 @@ def insert_flow_constraints(
     boundaries,
     # calibration_parameters,
     groupings,
+    future_boundary_additions=None,
     model_name=None,
     ):
 
@@ -117,10 +118,11 @@ def insert_flow_constraints(
 
         logger.info(f'Tuning flow constraint for {boundary} by factor {flow_max_pu.mean():.2f}')
 
-        if groupings is not None:        
+        if groupings is not None:
             lines = lines.append(pd.Index(groupings[boundary]))
 
-        assert not any([line in used_lines for line in lines]), 'Line used in multiple boundaries'
+        duplicate_lines = [line for line in lines if line in used_lines]
+        assert not duplicate_lines, f'Line(s) {duplicate_lines} used in multiple boundaries'
         used_lines.update(set(lines))
 
         lines = pd.Index(set(lines))
@@ -138,6 +140,15 @@ def insert_flow_constraints(
 
                 n.links_t.p_max_pu = pd.concat([pu, n.links_t.p_max_pu], axis=1)
                 n.links_t.p_min_pu = pd.concat([pu.mul(-1.), n.links_t.p_min_pu], axis=1)
+        
+        if future_boundary_additions is not None and boundary in future_boundary_additions:
+            for new_line in n.links.index.intersection(future_boundary_additions[boundary]):
+                logger.info(f'Adding flow constraint for future line {new_line} to {boundary}')
+
+                pu = pd.Series(flow_max_pu.values, index=n.snapshots, name=new_line)
+                n.links_t.p_max_pu = pd.concat([pu, n.links_t.p_max_pu], axis=1)
+                n.links_t.p_min_pu = pd.concat([pu.mul(-1.), n.links_t.p_min_pu], axis=1)
+
 
 
 def get_line_grouping(
@@ -241,8 +252,6 @@ if __name__ == '__main__':
 
     configure_logging(snakemake)
 
-    solver_name = snakemake.params['solver']
-    
     idx = pd.IndexSlice
 
     bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
@@ -277,7 +286,7 @@ if __name__ == '__main__':
     )
 
     with open(snakemake.input['transmission_boundaries']) as f:
-        boundaries = yaml.safe_load(f)
+        boundaries = yaml.safe_load(f)['existing_boundaries']
 
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
