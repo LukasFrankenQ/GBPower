@@ -32,8 +32,6 @@ if __name__ == '__main__':
 
     configure_logging(snakemake)
 
-    solver_name = snakemake.params['solver']
-    
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
         index_col=0,
@@ -91,8 +89,7 @@ if __name__ == '__main__':
 
     #################### National market ####################
 
-    print('\n\nstarting national wholesale model\n\n')
-    status, _ = n_national.optimize(solver_name=solver_name)
+    status, _ = n_national.optimize(solver_name='highs')
     n_national.export_to_netcdf(snakemake.output['network_national'])
 
     model_execution_overview.append(
@@ -105,7 +102,7 @@ if __name__ == '__main__':
         logger.info('Freezing interconnector commitments')
         freeze_interconnector_commitments(n_national, n_national_redispatch)
 
-    status, _ = n_national_redispatch.optimize(solver_name=solver_name)
+    status, _ = n_national_redispatch.optimize(solver_name='highs')
     balancing_volume = get_bidding_volume(n_national, n_national_redispatch).sum()
     n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 
