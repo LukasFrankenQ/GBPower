@@ -15,75 +15,8 @@ import networkx as nx
 from tabulate import tabulate
 from _helpers import configure_logging, set_nested_attr
 from summarize_system_cost import get_bidding_volume
+from calibrate_line_capacities import get_line_grouping, insert_flow_constraints, tune_line_capacities, anchors
 
-
-def freeze_battery_commitments(n_from, n_to):
-    '''
-    Takes wholesale commitments of batteries and PHS from n_from and inserts them 
-    into n_to, i.e. n_to HAS TO operate the respective storage units in the same
-    way as n_from.
-    '''
-
-    '''
-    for su in n_from.storage_units_t['p'].columns:
-
-        # if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
-        #     continue
-
-        p_set = n_from.storage_units_t['p'][su]
-
-        bus = n_to.storage_units.loc[su, 'bus']
-
-        n_to.remove('StorageUnit', su)
-
-        load_name = n_to.loads.index[n_to.loads.bus == bus][0]
-        new_load = n_to.loads_t['p_set'][load_name] - p_set
-
-        set_nested_attr(
-            n_to,
-            f'loads_t.p_set.{bus}',
-            new_load
-        )
-    '''
-    units = n_from.storage_units_t['p'].columns
-    n_to.storage_units_t.p_set.loc[:, units] = n_from.storage_units_t.p.loc[:, units]
-
-
-def freeze_interconnector_commitments(n_from, n_to):
-    '''
-    Takes wholesale commitments of interconnectors from n_from and inserts them 
-    into n_to, i.e. n_to HAS TO operate the respective interconnectors in the same
-    way as n_from.
-    '''
-    
-    ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
-    n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
-
-
-def rstu(n):
-    for i in n.storage_units.index:
-        n.remove('StorageUnit', i)
-
-
-def safe_solve(n, factor=1):
-
-    status = 'not_solved'
-    hold = n.copy()
-
-    while status != 'ok':
-        logger.info(f"\nSolving with factor {factor:.2f}\n")
-        n.links = hold.links.copy()
-
-        tune_line_capacities(n, factor)
-        status, _ = n.optimize(solver_name=solver_name)
-        
-        if status != 'ok':
-            factor *= 1.02
-
-        if factor > 10:
-            raise Exception('Failed to solve redispatch problem')
-
-    return status, np.around(factor, decimals=3)
 
 
 if __name__ == '__main__':
@@ -96,30 +29,30 @@ if __name__ == '__main__':
     
     idx = pd.IndexSlice
 
-    bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
-    bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
+    # bids = pd.read_csv(snakemake.input['bids'], index_col=[0,1], parse_dates=True)
+    # bmus = pd.read_csv(snakemake.input['bmus'], index_col=0)
 
-    bmus = bmus.loc[bmus['lat'] != 'distributed']
-    bmus['lat'] = bmus['lat'].astype(float)
+    # bmus = bmus.loc[bmus['lat'] != 'distributed']
+    # bmus['lat'] = bmus['lat'].astype(float)
 
-    bids = bids.loc[idx[:, 'vol'], :].sum()
-    bids.index = bids.index.get_level_values(0)
+    # bids = bids.loc[idx[:, 'vol'], :].sum()
+    # bids.index = bids.index.get_level_values(0)
 
     # select bmus that are likely to curtail due to grid congestion
-    renewable_bmus = bmus[
-        bmus.carrier.isin(['onwind', 'offwind', 'hydro', 'cascade'])
-        ].index
-    thermal_bmus = bmus[
-        (bmus.carrier.isin(['fossil', 'biomass', 'coal'])) & 
-        (bmus['lat'] > 55.3)
-    ].index
+    # renewable_bmus = bmus[
+    #     bmus.carrier.isin(['onwind', 'offwind', 'hydro', 'cascade'])
+    #     ].index
+    # thermal_bmus = bmus[
+    #     (bmus.carrier.isin(['fossil', 'biomass', 'coal'])) & 
+        # (bmus['lat'] > 55.3)
+    # ].index
 
-    bid_counting_units = renewable_bmus.union(thermal_bmus)
+    # bid_counting_units = renewable_bmus.union(thermal_bmus)
 
     # Get total daily bidding volume for these generators
-    daily_volume = bids.loc[
-        bids.index.intersection(bid_counting_units)
-        ].sum()
+    # daily_volume = bids.loc[
+    #     bids.index.intersection(bid_counting_units)
+    #     ].sum()
 
     flow_constraints = pd.read_csv(
         snakemake.input['boundary_flow_constraints'],
@@ -129,20 +62,12 @@ if __name__ == '__main__':
 
     with open(snakemake.input['transmission_boundaries']) as f:
         boundaries = yaml.safe_load(f)
-
-    # provides the name of one bus within the cluster of buses around transmission boundaries
-    # In a transmission network where the transmission lines that constitute the boundary
-    # are removed all buses that are in the same network graph as the anchor buses are assigned
-    # as the regional interpretation of the boundaries.
-    # I.e. for instance all lines in Scotland north of SSE-SP have the same thermal constraints
-    # applied to them as the boundary itself.
-    anchors = {
-        'SSE-SP': ['6441'],
-        'SCOTEX': ['5912'],
-        'SSHARN': ['5946'],
-        'FLOWSTH': ['6010', '5250'],
-        'SEIMP': ['4977'],
-    }
+    
+    with open(snakemake.input['calibration_factor']) as f:
+        calibration_factor = yaml.safe_load(f)['calibration_factor']
+    print(calibration_factor)
+    import sys
+    sys.exit()
 
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
@@ -187,8 +112,6 @@ if __name__ == '__main__':
 
     #################### National market ####################
 
-    tolerance = 0.05 # modelled balancing volume can deviate from actual balancing volume by this much
-
     print('\n\nstarting national wholesale model\n\n')
     status, _ = n_national.optimize(solver_name=solver_name)
     n_national.export_to_netcdf(snakemake.output['network_national'])
@@ -202,73 +125,6 @@ if __name__ == '__main__':
     if snakemake.wildcards.ic == 'flex':
         logger.info('Freezing interconnector commitments')
         freeze_interconnector_commitments(n_national, n_national_redispatch)
-
-    # the following loop ensures that modelled balancing volume matches actual balancing volume
-    tuned = False
-    counter = 0
-
-    # Initialize binary search bounds
-    left = 0.5  # minimum reasonable scaling factor
-    right = 2.0 # maximum reasonable scaling factor
-
-    unsolvable_case = False # special case deals with matching balancing volume is not possible for feasible model
-
-    while not tuned:
-        # Try the midpoint of the current range
-        if not unsolvable_case:
-            line_scaling_factor = (left + right) / 2
-
-        hold_redispatch = n_national_redispatch.copy()
-        tuned_line_capacities = tune_line_capacities(hold_redispatch, line_scaling_factor)
-        status, _ = hold_redispatch.optimize(solver_name=solver_name)
-
-        if status == 'ok':
-            balancing_volume = get_bidding_volume(n_national, hold_redispatch).sum()
-            error = abs(balancing_volume - daily_volume)
-
-            if error <= tolerance * daily_volume:
-                tuned = True
-
-            elif unsolvable_case:
-                tuned = True
-
-            else:
-                # Update binary search bounds based on whether we need more or less capacity
-                if balancing_volume > daily_volume:
-                    # Too much balancing volume - need to increase line capacity
-                    left = line_scaling_factor
-                else:
-                    # Too little balancing volume - need to decrease line capacity  
-                    right = line_scaling_factor
-        else:
-            # If infeasible, need more line capacity
-            if not unsolvable_case:
-                left = line_scaling_factor
-            else:
-                line_scaling_factor += 0.02
-
-        counter += 1
-        if status == 'ok' and right - left < 0.01:  # Convergence check
-            tuned = True
-        elif status == 'warning' and right - left < 0.01:
-            unsolvable_case = True
-
-        counter += 1
-        if counter > 100:
-            raise Exception('Failed to tune line capacities')
-
-        if status == 'ok':
-            logger.info(f'Received balancing volume {balancing_volume:.2f} with line scaling factor {line_scaling_factor:.2f}')
-        else:
-            logger.info(f'Model infeasible with line scaling factor {line_scaling_factor:.2f}')
-
-        # solved first such that line relaxation factor can also be applied to the other models
-        # status, relaxation_factor = safe_solve(n_national_redispatch)
-
-    print('=============================================================================')
-    logger.info(f'Successfully tuned line capacities after {counter} iterations and a line scaling factor of {line_scaling_factor:.2f}')
-    logger.info(f'Modelled balancing volume: {balancing_volume*1e-3:.2f} GWh, actual balancing volume: {daily_volume*1e-3:.2f} GWh')
-    print('=============================================================================')
 
     hold_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 

@@ -15,11 +15,75 @@ import networkx as nx
 from tabulate import tabulate
 from summarize_system_cost import get_bidding_volume
 from _helpers import configure_logging, set_nested_attr
-from solve_network import (
-    safe_solve,
-    freeze_interconnector_commitments,
-    freeze_battery_commitments
-)
+
+
+def freeze_battery_commitments(n_from, n_to):
+    '''
+    Takes wholesale commitments of batteries and PHS from n_from and inserts them 
+    into n_to, i.e. n_to HAS TO operate the respective storage units in the same
+    way as n_from.
+    '''
+
+    '''
+    for su in n_from.storage_units_t['p'].columns:
+
+        # if n_from.storage_units.loc[su, 'carrier'] in ['cascade', 'hydro']:
+        #     continue
+
+        p_set = n_from.storage_units_t['p'][su]
+
+        bus = n_to.storage_units.loc[su, 'bus']
+
+        n_to.remove('StorageUnit', su)
+
+        load_name = n_to.loads.index[n_to.loads.bus == bus][0]
+        new_load = n_to.loads_t['p_set'][load_name] - p_set
+
+        set_nested_attr(
+            n_to,
+            f'loads_t.p_set.{bus}',
+            new_load
+        )
+    '''
+    units = n_from.storage_units_t['p'].columns
+    n_to.storage_units_t.p_set.loc[:, units] = n_from.storage_units_t.p.loc[:, units]
+
+
+def freeze_interconnector_commitments(n_from, n_to):
+    '''
+    Takes wholesale commitments of interconnectors from n_from and inserts them 
+    into n_to, i.e. n_to HAS TO operate the respective interconnectors in the same
+    way as n_from.
+    '''
+    
+    ic = n_from.links.loc[n_from.links.carrier == 'interconnector'].index
+    n_to.links_t.p_set.loc[:, ic] = n_from.links_t.p0.loc[:, ic]
+
+
+def rstu(n):
+    for i in n.storage_units.index:
+        n.remove('StorageUnit', i)
+
+
+def safe_solve(n, factor=1):
+
+    status = 'not_solved'
+    hold = n.copy()
+
+    while status != 'ok':
+        logger.info(f"\nSolving with factor {factor:.2f}\n")
+        n.links = hold.links.copy()
+
+        tune_line_capacities(n, factor)
+        status, _ = n.optimize(solver_name=solver_name)
+        
+        if status != 'ok':
+            factor *= 1.02
+
+        if factor > 10:
+            raise Exception('Failed to solve redispatch problem')
+
+    return status, np.around(factor, decimals=3)
 
 
 def insert_flow_constraints(
@@ -156,6 +220,21 @@ def tune_line_capacities(n, factor):
     n.links.loc[n.links.carrier != 'interconnector', 'p_nom'] *= factor
 
 
+# provides the name of one bus within the cluster of buses around transmission boundaries
+# In a transmission network where the transmission lines that constitute the boundary
+# are removed all buses that are in the same network graph as the anchor buses are assigned
+# as the regional interpretation of the boundaries.
+# I.e. for instance all lines in Scotland north of SSE-SP have the same thermal constraints
+# applied to them as the boundary itself.
+anchors = {
+    'SSE-SP': ['6441'],
+    'SCOTEX': ['5912'],
+    'SSHARN': ['5946'],
+    'FLOWSTH': ['6010', '5250'],
+    'SEIMP': ['4977'],
+}
+
+
 if __name__ == '__main__':
 
     logger.warning('Relaxation factors for zonal and nodal should start at national redispatch relaxation factor')
@@ -199,20 +278,6 @@ if __name__ == '__main__':
 
     with open(snakemake.input['transmission_boundaries']) as f:
         boundaries = yaml.safe_load(f)
-
-    # provides the name of one bus within the cluster of buses around transmission boundaries
-    # In a transmission network where the transmission lines that constitute the boundary
-    # are removed all buses that are in the same network graph as the anchor buses are assigned
-    # as the regional interpretation of the boundaries.
-    # I.e. for instance all lines in Scotland north of SSE-SP have the same thermal constraints
-    # applied to them as the boundary itself.
-    anchors = {
-        'SSE-SP': ['6441'],
-        'SCOTEX': ['5912'],
-        'SSHARN': ['5946'],
-        'FLOWSTH': ['6010', '5250'],
-        'SEIMP': ['4977'],
-    }
 
     logger.warning('Currently calibration unaware if tuning lines or links.')
 
