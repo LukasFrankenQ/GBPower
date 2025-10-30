@@ -24,6 +24,20 @@ from calibrate_line_capacities import (
     freeze_interconnector_commitments,
     safe_solve
 )
+from add_electricity import ensure_thermal_supply
+
+
+def add_backup_generators(n):
+    ac_buses = n.buses[n.buses.carrier == 'AC']
+    n.add(
+        "Generator",
+        ac_buses.index + " backup",
+        bus=ac_buses.index,
+        carrier="backup",
+        capital_cost=10000,
+        marginal_cost=0,
+        p_nom_extendable=True,
+    )
 
 
 if __name__ == '__main__':
@@ -102,7 +116,19 @@ if __name__ == '__main__':
         logger.info('Freezing interconnector commitments')
         freeze_interconnector_commitments(n_national, n_national_redispatch)
 
-    status, _ = n_national_redispatch.optimize(solver_name='highs')
+    # add_backup_generators(n_national_redispatch)
+
+    status, _ = safe_solve(n_national_redispatch, calibration_factor)
+    # status, _ = n_national_redispatch.optimize(solver_name='highs')
+
+    assert status == 'ok', f'National redispatch model infeasible. Applied relax factor {calibration_factor:.2f}'
+
+
+    print('==============================================')
+    print(n_national_redispatch.generators.index)
+    print('==============================================')
+    print(n_national.generators.index)
+
     balancing_volume = get_bidding_volume(n_national, n_national_redispatch).sum()
     n_national_redispatch.export_to_netcdf(snakemake.output['network_national_redispatch'])  
 
@@ -130,6 +156,7 @@ if __name__ == '__main__':
         ) 
     )
 
+    add_backup_generators(n_nodal)
     n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
 
     #################### RNP models ####################
@@ -195,6 +222,7 @@ if __name__ == '__main__':
     # relax_line_capacities(n_zonal_redispatch, relaxation_factor) # new way of doing it
     # status, _ = n_zonal_redispatch.optimize(solver_name=solver_name)
 
+    add_backup_generators(n_zonal_redispatch)
     status, relaxation_factor = safe_solve(n_zonal_redispatch, calibration_factor)
 
     assert status == 'ok', f'Zonal redispatch model infeasible. Applied relax factor {calibration_factor:.2f}'

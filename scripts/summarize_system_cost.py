@@ -136,20 +136,22 @@ def get_bidding_volume(nat, bal):
         )
 
     dispatchable_south = gen.loc[
-        (gen.carrier.isin(['fossil', 'biomass', 'coal'])) &
+        (gen.carrier.isin(['fossil', 'biomass', 'coal', 'backup'])) &
         (gen['region'] == 'south')
     ].index
     dispatchable_north = gen.loc[
-        (gen.carrier.isin(['fossil', 'biomass', 'coal'])) &
+        (gen.carrier.isin(['fossil', 'biomass', 'coal', 'backup'])) &
         (gen['region'] == 'north')
     ].index
 
     bidding_volume = pd.Series(0, nat.snapshots)
 
     for plant in [wind, solar, dispatchable_south, dispatchable_north]:
+
+        nat_dispatch = nat.generators_t.p[plant.intersection(nat.generators.index)].sum(axis=1)
         
         bidding_volume += (
-            nat.generators_t.p[plant].sum(axis=1) -
+            nat_dispatch -
             bal.generators_t.p[plant].sum(axis=1)
         ).clip(lower=0)
     
