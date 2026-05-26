@@ -350,7 +350,7 @@ def clustering_for_n_clusters(
     )
 
     if not n.links.empty:
-        nc = clustering.network
+        nc = clustering.n
         nc.links["underwater_fraction"] = (
             n.links.eval("underwater_fraction * length").div(nc.links.length).dropna()
         )
@@ -387,7 +387,10 @@ def make_busmap(n, zones):
         )
 
     # return gpd.sjoin(df, zones, how="left").rename(columns={"index_right": 0})[0]
-    return df.sjoin(zones, how="left").rename(columns={"name": 0}).dropna()[0]
+    joined = df.sjoin(zones, how="left")
+    # newer geopandas suffixes the right-side 'name' column when the bus index is also called 'name'
+    zone_col = 'name_right' if 'name_right' in joined.columns else 'name'
+    return joined.rename(columns={zone_col: 0}).dropna()[0]
 
 
 if __name__ == "__main__":
@@ -461,6 +464,9 @@ if __name__ == "__main__":
             geometry=gpd.points_from_xy(n.buses.x, n.buses.y),
             crs=zonal_layout.crs
             ).sjoin(zonal_layout)
+        # newer geopandas appends '_right' suffix when left & right share a column name; restore the bare 'name' key
+        if 'name' not in buses.columns and 'name_right' in buses.columns:
+            buses = buses.rename(columns={'name_right': 'name'})
 
         with open(snakemake.input['transmission_boundaries']) as f:
             boundaries = yaml.safe_load(f)['existing_boundaries']
@@ -535,8 +541,9 @@ if __name__ == "__main__":
         # Fast-path if no clustering is necessary
         busmap = n.buses.index.to_series()
         linemap = n.lines.index.to_series()
+        # PyPSA 1.x Clustering is a dataclass with just (n, busmap, linemap).
         clustering = pypsa.clustering.spatial.Clustering(
-            n, busmap, linemap, linemap, pd.Series(dtype="O")
+            n=n, busmap=busmap, linemap=linemap
         )
     else:
         Nyears = n.snapshot_weightings.objective.sum() / 8760
@@ -561,14 +568,14 @@ if __name__ == "__main__":
             hvac_overhead_cost,
         )
 
-    update_p_nom_max(clustering.network)
+    update_p_nom_max(clustering.n)
 
     if params['cluster_network'].get("consider_efficiency_classes"):
         labels = [f" {label} efficiency" for label in ["low", "medium", "high"]]
-        nc = clustering.network
+        nc = clustering.n
         nc.generators["carrier"] = nc.generators.carrier.replace(labels, "", regex=True)
 
-    clustering.network.meta = dict(
+    clustering.n.meta = dict(
         snakemake.config, **dict(wildcards=dict(snakemake.wildcards))
     )
-    clustering.network.export_to_netcdf(snakemake.output.network)
+    clustering.n.export_to_netcdf(snakemake.output.network)

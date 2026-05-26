@@ -1,0 +1,64 @@
+[workspace]
+authors = ["LukasFrankenQ <lukas.b.franken@gmail.com>"]
+channels = ["conda-forge", "bioconda"]
+name = "gbpower"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+# Smoke-test: end-to-end run for an example day with substantial curtailment.
+example = "snakemake -call --configfile config.yaml -- results/2024-03-21/system_cost_summary_flex.csv"
+
+[dependencies]
+python = ">=3.8"
+pip = "*"
+atlite = ">=0.2.9"
+pypsa = ">=0.31.0"
+linopy = "*"
+dask = "*"
+xlrd = "*"
+openpyxl = "!=3.1.1"
+seaborn = "*"
+snakemake-minimal = ">=8.14"
+memory_profiler = "*"
+yaml = "*"
+pytables = "*"
+lxml = "*"
+powerplantmatching = ">=0.5.15,<0.6"
+numpy = "*"
+pandas = ">=2.1"
+geopandas = ">=1"
+xarray = ">=2023.11.0"
+rioxarray = "*"
+netcdf4 = "*"
+networkx = "*"
+scipy = "*"
+glpk = "*"
+attrdict = "*"
+shapely = ">=2.0"
+pyscipopt = "*"
+matplotlib = "*"
+proj = "*"
+fiona = "*"
+country_converter = "*"
+geopy = "*"
+tqdm = "*"
+pytz = "*"
+jpype1 = "*"
+pyxlsb = "*"
+graphviz = "*"
+pre-commit = "*"
+geojson = "*"
+ipython = "*"
+cartopy = "*"
+descartes = "*"
+rasterio = "!=1.2.10"
+
+[pypi-dependencies]
+tsam = ">=2.3.1"
+snakemake-storage-plugin-http = "*"
+snakemake-executor-plugin-slurm = "*"
+snakemake-executor-plugin-cluster-generic = "*"
+highspy = "*"
+# Imported by scripts/build_base.py — missing from envs/environment.yaml but needed at runtime.
+entsoe-py = "*"

@@ -90,17 +90,6 @@ if __name__ == '__main__':
     insert_flow_constraints(n_zonal, *args, future_boundary_additions=future_boundary_additions, model_name='zonal wholesale')
     insert_flow_constraints(n_zonal_redispatch, *args, future_boundary_additions=future_boundary_additions, model_name='zonal redispatch')
 
-    # RNP models
-    # rnp1: IC have nodal price signal
-    # rnp2: batteries have nodal price signal
-    # rnp3: both have nodal price signal
-    # (no redispatch model needed, balancing volume is determined from the difference
-    # between rnpx to n_nodal)
-
-    rnp1 = n_national.copy()
-    rnp2 = n_national.copy()
-    rnp3 = n_national.copy()
-
     #################### National market ####################
 
     status, _ = n_national.optimize(solver_name='highs')
@@ -158,41 +147,6 @@ if __name__ == '__main__':
 
     add_backup_generators(n_nodal)
     n_nodal.export_to_netcdf(snakemake.output['network_nodal'])
-
-    #################### RNP models ####################
-
-    freeze_interconnector_commitments(n_nodal, rnp1)
-
-    freeze_battery_commitments(n_nodal, rnp2)
-
-    freeze_interconnector_commitments(n_nodal, rnp3)
-    freeze_battery_commitments(n_nodal, rnp3)
-
-    nice_names = {
-        'rnp1': 'ICs nodal price signal',
-        'rnp2': 'Batteries nodal price signal',
-        'rnp3': 'Both nodal price signal',
-    }
-
-    for model in ['rnp1', 'rnp2', 'rnp3']:
-
-        n_rnp = globals()[model]
-        status, relaxation_factor = safe_solve(n_rnp, calibration_factor)
-        # balancing_volume = get_bidding_volume(n_rnp, n_nodal).sum()
-
-        assert status == 'ok', f'{nice_names[model]} model infeasible. Applied relax factor {calibration_factor:.2f}'
-
-        globals()[model].export_to_netcdf(snakemake.output[f'network_{model}'])
-
-        model_execution_overview.append(
-            (
-                nice_names[model],
-                status,
-                str(np.around(calibration_factor, decimals=2)),
-                '-'
-                # f'{balancing_volume*1e-3:.2f}'
-            ) 
-        )
 
     #################### Zonal market ####################
 

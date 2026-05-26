@@ -2,33 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-rule gather_rnp_metrics:
-    input:
-        network_nodal="results/{day}/network_flex_s_nodal_solved.nc",
-        network_national="results/{day}/network_flex_s_national_solved.nc",
-        network_national_redispatch="results/{day}/network_flex_s_national_solved_redispatch.nc",
-        network_rnp1="results/{day}/network_flex_s_rnp1_solved.nc",
-        network_rnp2="results/{day}/network_flex_s_rnp2_solved.nc",
-    output:
-        interconnector_flows="rnp_metrics/{day}/interconnector_flows.csv",
-        storage_operation="rnp_metrics/{day}/storage_operation.csv",
-        energy_balance="rnp_metrics/{day}/energy_balance.csv",
-        marginal_prices="rnp_metrics/{day}/marginal_prices.csv",
-        balancing_volume="rnp_metrics/{day}/balancing_volume.csv",
-    resources:
-        mem_mb=1500,
-    log:
-        "../logs/rnp_metrics/{day}_flex.log",
-    conda:
-        "../envs/environment.yaml",
-    script:
-        "../scripts/gather_rnp_metrics.py"
-
-
 rule summarize_bmu_revenues:
     input:
-        bids="data/base/{day}/bids.csv",
-        offers="data/base/{day}/offers.csv",
+        bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
+        offers=lambda wc: f"data/base/{fix_year(wc.day)}/offers.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         roc_values="data/prerun/roc_values.csv",
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
@@ -37,8 +14,8 @@ rule summarize_bmu_revenues:
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
         default_balancing_prices=lambda wildcards: 'data/prerun/balancing_prices/{year}-week{week}.csv'.format(
-            year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
-            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
+            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
+            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
     output:
         bmu_revenues_nodal="results/{day}/bmu_revenues_{ic}_nodal.csv",
@@ -63,8 +40,8 @@ rule summarize_bmu_revenues:
 
 rule summarize_system_cost:
     input:
-        bids="data/base/{day}/bids.csv",
-        offers="data/base/{day}/offers.csv",
+        bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
+        offers=lambda wc: f"data/base/{fix_year(wc.day)}/offers.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         roc_values="data/prerun/roc_values.csv",
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",
@@ -100,11 +77,11 @@ rule summarize_frontend_data:
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         system_cost_summary="results/{day}/system_cost_summary_{ic}.csv",
         gb_shape="data/gb_shape.geojson",
-        bids="data/base/{day}/bids.csv",
-        offers="data/base/{day}/offers.csv",
+        bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
+        offers=lambda wc: f"data/base/{fix_year(wc.day)}/offers.csv",
         default_balancing_prices=lambda wildcards: 'data/prerun/balancing_prices/{year}-week{week}.csv'.format(
-            year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
-            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
+            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
+            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
     output:
         frontend_revenues="frontend/{day}/revenues_{ic}.csv",

@@ -26,7 +26,26 @@ from pypsa.clustering.spatial import (
     busmap_by_stubs,
     get_clustering_from_busmap,
 )
-from pypsa.io import import_components_from_dataframe, import_series_from_dataframe
+# PyPSA 1.x removed pypsa.io.import_components_from_dataframe / import_series_from_dataframe.
+# These shims preserve the old call-sites' behaviour using the modern `n.add` API.
+def import_components_from_dataframe(n, df, c):
+    if df.empty:
+        return
+    n.add(c, df.index, **{col: df[col] for col in df.columns})
+
+
+def import_series_from_dataframe(n, df, c, attr):
+    if df.empty:
+        return
+    list_name = n.components[c]['list_name']
+    t_dict = getattr(n, f'{list_name}_t')
+    existing = t_dict[attr]
+    new_cols = df.columns.difference(existing.columns)
+    if not new_cols.empty:
+        t_dict[attr] = pd.concat([existing, df[new_cols]], axis=1)
+    common = df.columns.intersection(existing.columns)
+    if not common.empty:
+        t_dict[attr].loc[:, common] = df[common].values
 from scipy.sparse.csgraph import connected_components, dijkstra
 
 logger = logging.getLogger(__name__)
@@ -113,8 +132,8 @@ def simplify_network_to_380(n):
             if col.startswith("bus"):
                 df[col] = df[col].map(trafo_map)
 
-    n.mremove("Transformer", n.transformers.index)
-    n.mremove("Bus", n.buses.index.difference(trafo_map))
+    n.remove("Transformer", n.transformers.index)
+    n.remove("Bus", n.buses.index.difference(trafo_map))
 
     return n, trafo_map
 
@@ -212,7 +231,7 @@ def _aggregate_and_move_components(
     exclude_carriers=None,
 ):
     def replace_components(n, c, df, pnl):
-        n.mremove(c, n.df(c).index)
+        n.remove(c, n.df(c).index)
 
         import_components_from_dataframe(n, df, c)
         for attr, df in pnl.items():
@@ -240,10 +259,10 @@ def _aggregate_and_move_components(
         replace_components(n, one_port, df, pnl)
 
     buses_to_del = n.buses.index.difference(busmap)
-    n.mremove("Bus", buses_to_del)
+    n.remove("Bus", buses_to_del)
     for c in n.branch_components:
         df = n.df(c)
-        n.mremove(c, df.index[df.bus0.isin(buses_to_del) | df.bus1.isin(buses_to_del)])
+        n.remove(c, df.index[df.bus0.isin(buses_to_del) | df.bus1.isin(buses_to_del)])
 
 
 def simplify_links(
@@ -378,7 +397,7 @@ def simplify_links(
             # print('=============================')
             # print(b, buses, links)
             # print('all_links', all_links)
-            n.mremove("Link", all_links)
+            n.remove("Link", all_links)
 
             static_attrs = n.components["Link"]["attrs"].loc[lambda df: df.static]
             for attr, default in static_attrs.default.items():

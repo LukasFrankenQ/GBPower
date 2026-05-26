@@ -20,6 +20,7 @@ Functions
 
 
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -524,7 +525,7 @@ def build_boundary_flow_constraints(date_range):
         parse_dates=True
     )
 
-    if date_range[4].year < 2025:
+    if date_range[4].year < 2026:
         try:
             return year_data.loc[date_range]
         except KeyError:

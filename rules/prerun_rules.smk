@@ -354,7 +354,12 @@ rule build_cfds:
         "data/cfd_registers/CfD_Register_2024-07-03.xlsx",
         "data/cfd_registers/CfD_Register_2024-09-10.xlsx",
         "data/cfd_registers/CfD_Register_2024-09-18.xlsx",
-        bmu_locations="data/temp_located_bmus.csv",
+        "data/cfd_registers/CfD_Register_2025-01-31.xlsx",
+        "data/cfd_registers/CfD_Register_2025-04-23.xlsx",
+        "data/cfd_registers/CfD_Register_2025-07-29.xlsx",
+        "data/cfd_registers/CfD_Register_2025-10-31.xlsx",
+        "data/cfd_registers/CfD_Register_2025-12-23.xlsx",
+        bmu_locations="data/raw/temp_located_bmus.csv",
         bmu_mappings="data/cfd_registers/cfd_to_bm_unit_mapping.csv",
     output:
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",

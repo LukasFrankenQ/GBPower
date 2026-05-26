@@ -112,7 +112,7 @@ def adjust_to_future_year(
 
     year = int(year)
 
-    assert n.snapshots[0].year == 2024, 'model year has to be 2024 for future simulation'
+    assert n.snapshots[0].year == 2025, 'model year has to be 2025 for future simulation'
 
     print('Warning! Check for changes in fossil, nuclear and biomass fleet')
     print('Warning! Not yet increased demand')
@@ -206,6 +206,9 @@ def adjust_to_future_year(
         if year < row['pessimistic_delivery_year']:
             continue
 
+        if row['pessimistic_delivery_year'] <= 2025:
+            continue
+
         # taking fleet strength not from model but dataset because the model only knows
         # weather-dependent actual generation capacity during that day
         current_capacity = current_capacities[row['pypsa_carrier']]
@@ -243,12 +246,13 @@ def adjust_to_future_year(
     installed_capacity = current_fleet.loc['Battery storage (BESS)', 'Installed_Capacity_GW']
 
     new_assets = future_assets.loc[
+        (future_assets.Year > 2025) &
         (future_assets.Year <= year) &
         (future_assets.Department == 'Battery storage'),
         'Capacity_MW'
     ].sum() / 1000
 
-    print(f'Adjusting Battery Capacity from 2024 ({installed_capacity} GW) by adding {new_assets} GW')
+    print(f'Adjusting Battery Capacity from 2025 ({installed_capacity} GW) by adding {new_assets} GW')
 
     factor = (new_assets + installed_capacity) / installed_capacity
     n.storage_units.loc[n.storage_units.carrier == 'battery', 'p_nom'] *= factor
@@ -265,6 +269,7 @@ def adjust_to_future_year(
         scaling_factor = n.links.loc['8009', 'p_nom'] / 2250
 
         new_assets = future_assets.loc[
+            (future_assets.Year > 2025) &
             (future_assets.Year <= year) &
             (future_assets.Department == 'Transmission')
         ]
@@ -319,6 +324,7 @@ def adjust_to_future_year(
 
     generator_steps = 20
     ic_subset = future_assets.loc[
+        (future_assets.Year > 2025) &
         (future_assets.Year <= year) &
         (future_assets.Department == 'Interconnector')
         ]
@@ -454,7 +460,7 @@ if __name__ == '__main__':
 
     cfd_strike_prices = pd.read_csv(snakemake.input['cfd_strike_prices'], index_col=0, parse_dates=True)
 
-    if int(snakemake.wildcards.day[:4]) < 2025:
+    if int(snakemake.wildcards.day[:4]) < 2026:
         nodal.export_to_netcdf(snakemake.output['network_nodal'])
         zonal.export_to_netcdf(snakemake.output['network_zonal'])
         national.export_to_netcdf(snakemake.output['network_national'])
@@ -482,7 +488,7 @@ if __name__ == '__main__':
 
     load_scaling_factor = (
         future_loads[f'{snakemake.wildcards.day[:4]}_neso'] /
-        future_loads['2024_neso']
+        future_loads['2025_neso']
     )
 
     current_fleet = pd.read_csv(

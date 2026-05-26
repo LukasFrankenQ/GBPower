@@ -1,6 +1,11 @@
 import time
 import yaml
 import pandas as pd
+
+# Pandas 3.0 defaults string columns to ArrowStringArray, which PyPSA 1.2's xarray
+# internals (cbuses.sel(...)) can't index. Disable the new behaviour repo-wide.
+pd.set_option('future.infer_string', False)
+
 import networkx as nx
 from pathlib import Path
 from functools import partial

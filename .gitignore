@@ -14,3 +14,6 @@ gurobi.log
 *.parquet
 
 runscript.py
+# pixi environments
+.pixi/*
+!.pixi/config.toml

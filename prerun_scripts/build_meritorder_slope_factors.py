@@ -94,7 +94,7 @@ if __name__ == "__main__":
 
     net_load = pns_df.clip(lower=0).sum(axis=1) - export - charging
 
-    ms = pd.date_range('2022-01-01', '2025-01-01', freq='ME').strftime('%Y-%m')
+    ms = pd.date_range('2022-01-01', '2026-01-01', freq='ME').strftime('%Y-%m')
 
     gradients = []
     errors = []
@@ -132,11 +132,11 @@ if __name__ == "__main__":
 
     assert result.notna().all().all(), 'Some values are NaN.'
 
-    baseline_gradient = result.loc[result.index.str.contains('2024'), 'gradient'].mean()
+    baseline_gradient = result.loc[result.index.str.contains('2025'), 'gradient'].mean()
 
     result['factor'] = result['gradient'] / baseline_gradient
-    
-    # 2019 was 1.5 times higher than 2024 gas price (https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7du/mm23)
+
+    # 2019 gas price was 1.5 times higher than 2025 (https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7du/mm23 — re-check ratio against 2025 average when regenerating)
     result['factor_relative_to_2019'] = result['factor'] * 1.5
 
     logger.info(f'Saving merit order slope factors to {snakemake.output[0]}:')

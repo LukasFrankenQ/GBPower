@@ -15,16 +15,17 @@ rule add_electricity:
         battery_phs_capacities='data/prerun/battery_phs_capacities.csv',
         meritorder_slope_factors="data/prerun/meritorder_slope_factors.csv",
         interconnection_helpers='data/interconnection_helpers.yaml',
+        # Future-year days (>= 2026) reuse the 2025-anchor base data via fix_year().
         thermal_generation_costs=lambda wildcards: 'data/prerun/thermal_costs/{year}-week{week}.csv'.format(
-            year=datetime.strptime(wildcards.day, '%Y-%m-%d').year,
-            week=str(datetime.strptime(wildcards.day, '%Y-%m-%d').isocalendar()[1]).zfill(2)
+            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
+            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
         ),
-        day_ahead_prices='data/base/{day}/day_ahead_prices.csv',
-        maximum_export_limits='data/base/{day}/maximum_export_limits.csv',
-        physical_notifications='data/base/{day}/physical_notifications.csv',
-        europe_day_ahead_prices='data/base/{day}/europe_day_ahead_prices.csv',
-        europe_generation='data/base/{day}/europe_generation.csv',
-        nemo_powerflow="data/base/{day}/nemo_powerflow.csv",
+        day_ahead_prices=lambda wc: f"data/base/{fix_year(wc.day)}/day_ahead_prices.csv",
+        maximum_export_limits=lambda wc: f"data/base/{fix_year(wc.day)}/maximum_export_limits.csv",
+        physical_notifications=lambda wc: f"data/base/{fix_year(wc.day)}/physical_notifications.csv",
+        europe_day_ahead_prices=lambda wc: f"data/base/{fix_year(wc.day)}/europe_day_ahead_prices.csv",
+        europe_generation=lambda wc: f"data/base/{fix_year(wc.day)}/europe_generation.csv",
+        nemo_powerflow=lambda wc: f"data/base/{fix_year(wc.day)}/nemo_powerflow.csv",
     output:
         network="results/{day}/network_{ic}.nc"
     resources:
@@ -103,8 +104,8 @@ rule calibrate_line_capacities:
 
 def fix_year(day):
     y, m, d = map(int, day.split("-"))
-    if y >= 2025:
-        y = 2024
+    if y >= 2026:
+        y = 2025
     return f"{y:04d}-{m:02d}-{d:02d}"
 
 
@@ -112,7 +113,7 @@ rule prepare_future_network:
     params:
         countries_cost_slopes=config['countries_cost_slopes'],
     input:
-        # if day wildcard is >2025-01-01, 2024 data is used for the inputs
+        # if day wildcard is >=2026-01-01, 2025 data is used for the inputs
         # Use lambda function to check date and modify input day if needed
         calibration_factor=lambda wc: f"results/{fix_year(wc.day)}/calibration_factor_{wc.ic}.yaml",
         network_nodal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_nodal.nc",
@@ -120,6 +121,8 @@ rule prepare_future_network:
         network_zonal=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s_zonal.nc",
         base_network=lambda wc: f"results/{fix_year(wc.day)}/network_{wc.ic}_s.nc",
         europe_day_ahead_prices=lambda wc: f"data/base/{fix_year(wc.day)}/europe_day_ahead_prices.csv",
+        # TODO: source data/gb_2025_capacities.csv (DUKES 2025 / DESNZ statistical release / NESO TEC register)
+        # and switch this reference + the 'fleet_2024' key on the consumer side once available.
         fleet_2024="data/gb_2024_capacities.csv",
         ar4_results="data/ar4_results.csv",
         ar5_results="data/ar5_results.csv",
@@ -163,9 +166,6 @@ rule solve_network:
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
-        network_rnp1="results/{day}/network_{ic}_s_rnp1_solved.nc",
-        network_rnp2="results/{day}/network_{ic}_s_rnp2_solved.nc",
-        network_rnp3="results/{day}/network_{ic}_s_rnp3_solved.nc",
     resources:
         mem_mb=1500,
     log:

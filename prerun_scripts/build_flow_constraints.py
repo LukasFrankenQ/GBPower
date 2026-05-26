@@ -5,7 +5,7 @@
 """
 build_boundary_flow_base.py
 =============
-Builds database for flow limits in 2022, 2023, 2024 from half-hourly data.
+Builds database for flow limits in 2022, 2023, 2024, 2025 from half-hourly data.
 Instead of querying this data for each day, like the other data points, it is here
 helpful to get all data at once to simplify the interpolation of missing data points.
 """
@@ -106,6 +106,11 @@ def get_boundary_flow_day(date_range):
         .drop(columns=['_count'])
     )
 
+    # NESO renamed the SE Import boundary from `SEIMP` to versioned `SEIMPPR21/23/...`
+    # mid-2024. Map all SEIMPPR* variants back to the canonical `SEIMP` so downstream
+    # boundary matching and any callers expecting the original 5-boundary set still work.
+    df.index = df.index.map(lambda s: 'SEIMP' if s.startswith('SEIMPPR') else s)
+
     df.loc[df['limit'] >= 15_000, 'limit'] = np.nan
 
     try: # ironically crashes for some daylight saving endings
@@ -187,6 +192,8 @@ if __name__ == '__main__':
     year = snakemake.wildcards.year
 
     ds = []
+    boundaries = pd.Index(['SSE-SP', 'SCOTEX', 'SSHARN', 'FLOWSTH', 'SEIMP'])
+    failed_days = []
 
     for day in tqdm(pd.date_range(f'{year}-01-01', f'{year}-10-08')):
         day = day.strftime("%Y-%m-%d")
@@ -194,8 +201,16 @@ if __name__ == '__main__':
         sp_register = build_sp_register(day)
         date_range = sp_register.index
 
-        df = get_boundary_flow_day(date_range)
+        try:
+            df = get_boundary_flow_day(date_range)
+        except Exception as e:
+            logger.warning(f"get_boundary_flow_day failed for {day}: {type(e).__name__}: {e}. Filling with NaN.")
+            failed_days.append(day)
+            df = pd.DataFrame(np.nan, index=date_range, columns=boundaries)
         ds.append(df)
+
+    if failed_days:
+        logger.warning(f"Total failing days: {len(failed_days)} — {failed_days[:10]}{'...' if len(failed_days) > 10 else ''}")
 
     df = pd.concat(ds)
 
