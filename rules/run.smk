@@ -127,6 +127,7 @@ rule prepare_future_network:
         ar4_results="data/ar4_results.csv",
         ar5_results="data/ar5_results.csv",
         ar6_results="data/ar6_results.csv",
+        ar7_results="data/ar7_results.csv",
         marginal_prices_2030="data/prerun/europe_avg_day_ahead_prices_2030.csv",
         future_system_additions="data/UK_energy_build__2025_2030__with_coordinates.csv",
         future_transmission_additions="data/GB_onshore_transmission_additions_2025_2030.csv",

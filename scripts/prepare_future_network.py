@@ -185,18 +185,19 @@ def adjust_to_future_year(
     current_capacities = {
         'onwind': current_fleet.loc['Onshore wind', 'Installed_Capacity_GW'] * 1000,
         'offwind': current_fleet.loc['Offshore wind', 'Installed_Capacity_GW'] * 1000,
+        'solar': current_fleet.loc['Solar PV', 'Installed_Capacity_GW'] * 1000,
     }
 
     network_capacities = {
         pypsa_carrier: pd.concat((
             n.generators.loc[gen, 'p_nom'] * (
-                n.generators_t.p_max_pu[gen] 
-            if gen in n.generators_t.p_max_pu.columns 
+                n.generators_t.p_max_pu[gen]
+            if gen in n.generators_t.p_max_pu.columns
         else pd.Series(1, index=n.generators_t.p_max_pu.index)
             )
             for gen in n.generators.index[n.generators.carrier == pypsa_carrier]
         ), axis=1).sum(axis=1)
-        for pypsa_carrier in ['onwind', 'offwind']
+        for pypsa_carrier in ['onwind', 'offwind', 'solar']
     }
 
     for name, row in future_wind_generators.iterrows():
@@ -240,6 +241,51 @@ def adjust_to_future_year(
             p_max_pu=p_max_pu,
             marginal_cost=0,
         )
+
+    ##### Offshore wind from the build pipeline (rows not already covered by AR registers / Phase B PN data)
+    # AR registers (handled in the loop above) provide the wind farms that won CfD contracts.
+    # The build pipeline CSV additionally contains projects that procured via different routes
+    # (older AR rounds, negotiated CfDs, etc.). To avoid double-counting we skip rows whose name
+    # is already represented in the AR registers or in the 2025 PN-curated BMU master.
+    _ar_names_lc = {str(n).lower() for n in future_wind_generators.index}
+    # Hardcoded skiplist for projects already in 2025 PN data (Phase B curation)
+    _pn_phase_b_skip = {'moray west', 'neart na gaoithe (nng)'}
+
+    ow_rows = future_assets.loc[
+        (future_assets.Year > 2025) &
+        (future_assets.Year <= year) &
+        (future_assets.Department == 'Offshore wind')
+    ]
+    current_capacity_ow = current_capacities['offwind']
+    network_capacity_ow = network_capacities['offwind']
+    for _, row in ow_rows.iterrows():
+        bname = row['Asset_Name']
+        if pd.isna(row['Latitude']) or pd.isna(row['Longitude']):
+            logger.info(f"Skipping build-pipeline offshore wind {bname}: no coordinates")
+            continue
+        name_lc = str(bname).lower()
+        if name_lc in _pn_phase_b_skip:
+            continue
+        if any(arn in name_lc or name_lc in arn for arn in _ar_names_lc):
+            continue
+        pt = (row['Longitude'], row['Latitude'])
+        distances = np.sqrt((buslocs['x'] - pt[0])**2 + (buslocs['y'] - pt[1])**2)
+        closest_bus = distances.idxmin()
+        new_capacity = network_capacity_ow * (row['Capacity_MW'] / current_capacity_ow)
+        p_nom = new_capacity.max()
+        if p_nom <= 0:
+            continue
+        p_max_pu = new_capacity / p_nom
+        n.add(
+            'Generator',
+            f'{bname} (build_pipeline)',
+            bus=closest_bus,
+            carrier='offwind',
+            p_nom=p_nom,
+            p_max_pu=p_max_pu,
+            marginal_cost=0,
+        )
+        logger.info(f"Added build-pipeline offshore wind {bname}: {row['Capacity_MW']:.0f} MW at bus {closest_bus}")
 
     ##### Batteries
 
@@ -511,23 +557,33 @@ if __name__ == '__main__':
     # csv version of the main table from
     # https://assets.publishing.service.gov.uk/media/66d6ad7c6eb664e57141db4b/Contracts_for_Difference_Allocation_Round_6_results.pdf
     ar6 = pd.read_csv(snakemake.input['ar6_results'], index_col=0)
+    # AR7 + AR7a (offshore + floating + onshore + solar + tidal); 201 projects.
+    ar7 = pd.read_csv(snakemake.input['ar7_results'], index_col=0)
 
     ar4 = ar4.rename(columns={'Strike Price(£/MWh)': 'Strike Price (£/MWh)', 'Size(MW)': 'Size (MW)'})
     ar5 = ar5.rename(columns={'ProjectLocation': 'Project Location'})
 
     ar5 = add_lat_lon(ar5)
     ar6 = add_lat_lon(ar6)
+    ar7 = add_lat_lon(ar7)
 
-    future_wind_generators = pd.concat((ar4, ar5, ar6))
+    future_wind_generators = pd.concat((ar4, ar5, ar6, ar7))
 
     pypsa_carrier_mapper = {
         'Onshore Wind (>5MW)': 'onwind',
         'Offshore Wind': 'offwind',
         'Floating Offshore Wind': 'offwind',
         'Remote Island Wind (RIW)': 'onwind',
+        'Solar Photovoltaic': 'solar',
+        # 'Tidal Stream' intentionally unmapped: AR7a has 4 projects totalling ~21 MW; negligible.
     }
 
     future_wind_generators['pypsa_carrier'] = future_wind_generators['Technology Type'].map(pypsa_carrier_mapper)
+    # Drop rows with unmapped technology (Tidal Stream etc.)
+    n_dropped = future_wind_generators['pypsa_carrier'].isna().sum()
+    if n_dropped:
+        logger.info(f"Dropping {n_dropped} CfD projects with unmapped technology (e.g. Tidal Stream).")
+    future_wind_generators = future_wind_generators[future_wind_generators['pypsa_carrier'].notna()]
 
     future_wind_generators['optimistic_delivery_year'] = future_wind_generators['Delivery Year'].str.split('/').str[0].astype(int)
     future_wind_generators['pessimistic_delivery_year'] = future_wind_generators['Delivery Year'].str.split('/').str[1].astype(int) + 2000

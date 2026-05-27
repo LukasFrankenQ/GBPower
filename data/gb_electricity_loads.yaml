@@ -8,3 +8,9 @@
 2028_neso: 280.1 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
 2029_neso: 283.6 # TWh, NESO Clean Power 2030 – Annex 1 (same definition & method as above)
 2030_neso: 287.0 # TWh, NESO Clean Power 2030 – Annex 1 (2030 GB consumer demand ≈287 TWh; use as export-cleaned generation proxy when losses aren't modelled)
+# 2031–2035: linear extrapolation of the 2024→2030 NESO trajectory (+3.5 TWh/yr). STOPGAP — replace with FES "Beyond 2030" / NESO ETYS once published.
+2031_neso: 290.5
+2032_neso: 294.0
+2033_neso: 297.5
+2034_neso: 301.0
+2035_neso: 304.5
