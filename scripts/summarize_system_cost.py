@@ -168,93 +168,49 @@ def get_bidding_volume(nat, bal):
     return bidding_volume * 0.5
 
 
+def _curve_cost(model_vol, curve):
+    """Area under a pooled marginal price-vs-cumulative-volume curve, 0 -> model_vol (£).
+
+    `curve` has columns cumvol_MWh (ascending bin edges) and marginal_price_GBP_per_MWh,
+    pooled from all 2022-2025 days (prerun_scripts/build_balancing_curves.py). Volume beyond
+    the largest historical bin is held flat at the top-of-stack price (np.interp end-hold),
+    so a model redispatch volume larger than any single historical day is still priced from
+    real high-volume offers — not the single most expensive offer of one day (the old
+    `actual['price'].iloc[-1]` extrapolation that dominated 2028-29 costs).
+    """
+    if model_vol <= 0:
+        return 0.0
+    v = curve['cumvol_MWh'].to_numpy(dtype=float)
+    p = curve['marginal_price_GBP_per_MWh'].to_numpy(dtype=float)
+    grid = np.linspace(0.0, model_vol, 4000)
+    pg = np.interp(grid, v, p)        # flat-held at p[0] below v[0] and p[-1] above v[-1]
+    return float(np.sum(0.5 * (pg[:-1] + pg[1:]) * np.diff(grid)))   # trapezoidal area
+
+
 def get_balancing_cost(
         wholesale,
         balanced,
-        actual_bids,
-        actual_offers
+        offer_curve,
+        bid_curve,
         ):
-
+    """Cost of the model's redispatch volume, priced against the pooled 2022-2025 bid and
+    offer curves (area under each curve up to the model volume). Returns per-snapshot
+    (bid_cost, offer_cost) series, distributed across snapshots by the redispatch-volume shape.
+    """
     bidding_volume = get_bidding_volume(wholesale, balanced)
     bidding_volume.index = pd.to_datetime(bidding_volume.index, utc=True)
 
-    balancing_cost_shape = bidding_volume.copy().div(bidding_volume.sum())
-
-    bid_default_cost = 50 # £/MWh
-    offer_default_cost = 90 # £/MWh
-
-    process_data = lambda df: (
-        df
-        .stack()
-        .unstack(1)
-        .dropna()
-        .reset_index(drop=True)
-        .sort_values('price')
-    )
-
-    try:
-        actual_bids = process_data(actual_bids)
-    except KeyError:
-        actual_bids = pd.DataFrame(0, index=['dummy_bmu'], columns=['vol', 'price'])
-
-    try:
-        actual_offers = process_data(actual_offers)
-    except KeyError:
-        actual_offers = pd.DataFrame(0, index=['dummy_bmu'], columns=['vol', 'price'])
-
-    def is_faulty_price(prices):
-
-        nine_check = lambda num: str(int(num)).count('9') >= 3
-        magnitude_check = lambda num: num > 5000
-
-        return prices.apply(nine_check) | prices.apply(magnitude_check)
-
-    # there appears to be a nonzero risk of faulty prices of vast magnitude to
-    # sneak into bid/offer prices.
-    # Appears to be a very rare occurance, but still needs correction
-    # due to huge impact.
-    actual_bids.loc[
-        mask,
-        'price'
-    ] = actual_bids.loc[~(mask := is_faulty_price(actual_bids['price'])), 'price'].median()
-
-    actual_offers.loc[
-        mask,
-        'price'
-    ] = actual_offers.loc[~(mask := is_faulty_price(actual_offers['price'])), 'price'].median()
-
-
-    actual_bids['cumvol'] = actual_bids['vol'].cumsum()
-    actual_offers['cumvol'] = actual_offers['vol'].cumsum()
-
     model_vol = bidding_volume.sum()
-    
-    costs = {
-        'bid': 0.,
-        'offer': 0.,
-    }
+    if model_vol <= 0:
+        zero = bidding_volume * 0.0
+        return zero, zero
 
-    for mode in ['bid', 'offer']:
-        
-        actual = actual_bids if mode == 'bid' else actual_offers
-        default_cost = bid_default_cost if mode == 'bid' else offer_default_cost
+    balancing_cost_shape = bidding_volume.div(model_vol)
 
-        if actual['vol'].sum() == 0:
-            costs[mode] += default_cost * model_vol
-            break
+    bid_cost = _curve_cost(model_vol, bid_curve)
+    offer_cost = _curve_cost(model_vol, offer_curve)
 
-        elif model_vol > actual['vol'].sum():
-            costs[mode] += actual['price'].dot(actual['vol'])
-            costs[mode] += actual['price'].iloc[-1] * (model_vol - actual['vol'].sum())
-
-        else:
-            ss = actual.loc[actual['cumvol'] < model_vol]
-            remainder = actual.loc[actual['cumvol'] >= model_vol]
-
-            costs[mode] += ss['price'].dot(ss['vol'])
-            costs[mode] += (model_vol - ss['vol'].sum()) * remainder['price'].iloc[0]
-
-    return balancing_cost_shape * costs['bid'], balancing_cost_shape * costs['offer']
+    return balancing_cost_shape * bid_cost, balancing_cost_shape * offer_cost
 
 
 if __name__ == '__main__':
@@ -271,8 +227,10 @@ if __name__ == '__main__':
 
     logger.info('Computing Balancing Costs')
 
-    bids = pd.read_csv(snakemake.input.bids, index_col=[0,1], parse_dates=True)
-    offers = pd.read_csv(snakemake.input.offers, index_col=[0,1], parse_dates=True)
+    # Pooled 2022-2025 bid/offer curves (price vs within-day cumulative volume) replace the
+    # per-day stack + single-most-expensive-offer extrapolation. See build_balancing_curves.py.
+    offer_curve = pd.read_csv(snakemake.input.offer_curve)
+    bid_curve = pd.read_csv(snakemake.input.bid_curve)
 
     cfd_strike_prices = pd.read_csv(
         snakemake.input.cfd_strike_prices,
@@ -285,7 +243,7 @@ if __name__ == '__main__':
     # 1 reflects that no money is yet allocated for grandfathering
     congestion_rent_compensation_share = 1.
 
-    bidcosts, offercosts = get_balancing_cost(nat, nat_bal, bids, offers)
+    bidcosts, offercosts = get_balancing_cost(nat, nat_bal, offer_curve, bid_curve)
     total_national_costs = pd.DataFrame(
         {
             'wholesale': get_wholesale_cost(nat).values,
@@ -299,7 +257,7 @@ if __name__ == '__main__':
         index=nat.snapshots
     ).mul(1e-6)
 
-    bidcosts, offercosts = get_balancing_cost(zon, zon_bal, bids, offers)
+    bidcosts, offercosts = get_balancing_cost(zon, zon_bal, offer_curve, bid_curve)
     total_zonal_costs = pd.DataFrame(
         {
             'wholesale': get_wholesale_cost(zon).values,

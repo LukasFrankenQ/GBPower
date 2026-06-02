@@ -200,6 +200,15 @@ def adjust_to_future_year(
         for pypsa_carrier in ['onwind', 'offwind', 'solar']
     }
 
+    # Pre-compute normalized fleet-availability profiles (peak = 1.0) per carrier.
+    # The old formula `new_capacity = network_capacity × (size / current_capacity)` mis-scales:
+    # for wind it over-states (network_capacity.max() > current_capacity), and for solar it
+    # under-states by 100-1000× (model's existing solar fleet ~18 MW vs national ~17 GW).
+    fleet_profiles = {}
+    for pcarrier, nc in network_capacities.items():
+        peak = nc.max()
+        fleet_profiles[pcarrier] = (nc / peak) if peak > 0 else pd.Series(1.0, index=nc.index)
+
     for name, row in future_wind_generators.iterrows():
 
         print(f'Adding {name}')
@@ -210,33 +219,25 @@ def adjust_to_future_year(
         if row['pessimistic_delivery_year'] <= 2025:
             continue
 
-        # taking fleet strength not from model but dataset because the model only knows
-        # weather-dependent actual generation capacity during that day
-        current_capacity = current_capacities[row['pypsa_carrier']]
-        network_capacity = network_capacities[row['pypsa_carrier']]
-
+        pcarrier = row['pypsa_carrier']
         pt = row[['Longitude', 'Latitude']].values
 
         # Calculate distances from point to all bus locations
         distances = np.sqrt(
-            (buslocs['x'] - pt[0])**2 + 
+            (buslocs['x'] - pt[0])**2 +
             (buslocs['y'] - pt[1])**2
         )
-        
-        # Get index of minimum distance
         closest_bus = distances.idxmin()
 
-        new_capacity_share = row['Size (MW)'] / current_capacity
-        new_capacity = network_capacity * new_capacity_share
-
-        p_nom = new_capacity.max()
-        p_max_pu = new_capacity / p_nom
+        # Direct p_nom from row; p_max_pu from the carrier's normalized fleet profile.
+        p_nom = float(row['Size (MW)'])
+        p_max_pu = fleet_profiles[pcarrier]
 
         n.add(
             'Generator',
             name,
             bus=closest_bus,
-            carrier=row['pypsa_carrier'],
+            carrier=pcarrier,
             p_nom=p_nom,
             p_max_pu=p_max_pu,
             marginal_cost=0,
@@ -287,21 +288,82 @@ def adjust_to_future_year(
         )
         logger.info(f"Added build-pipeline offshore wind {bname}: {row['Capacity_MW']:.0f} MW at bus {closest_bus}")
 
-    ##### Batteries
+    ##### Renewable + battery capacity expansion to CP30 / Beyond-2030 targets
+    # The AR4-7 register additions only reach delivery years 2028-2030. To track NESO
+    # Clean Power 2030 + CCC 7CB Beyond 2030 trajectories beyond that, scale each
+    # carrier's fleet to its year-target. Total-system CP30/CCC numbers are multiplied
+    # by the transmission share (since GBPower only models transmission-connected units).
+    #
+    # Sources:
+    #   - NESO Clean Power 2030 Annex 1 (Dec 2024) — 2030 mid-point targets
+    #   - CCC 7th Carbon Budget Balanced Pathway (Feb 2025) — 2040 anchors
+    #   - DESNZ/NESO Connections Reform Annex (Apr 2025) — transmission share
+    RENEWABLE_TARGETS_MW = {
+        'offwind':  {2024: 14_800, 2030: 46_500, 2035: 67_000, 2040: 88_000},
+        'onwind':   {2024: 14_200, 2030: 28_000, 2035: 30_000, 2040: 32_000},
+        'solar':    {2024: 17_200, 2030: 46_000, 2035: 64_000, 2040: 82_000},
+        'battery':  {2024:  4_700, 2030: 25_000, 2035: 30_000, 2040: 35_000},
+    }
+    T_SHARE = {  # transmission-connected fraction (linear 2024→2030, flat after)
+        'offwind':  {2024: 1.00, 2030: 1.00},
+        'onwind':   {2024: 0.70, 2030: 0.55},
+        'solar':    {2024: 0.10, 2030: 0.23},
+        'battery':  {2024: 0.30, 2030: 0.59},
+    }
 
-    installed_capacity = current_fleet.loc['Battery storage (BESS)', 'Installed_Capacity_GW']
+    def _interp(d, yr):
+        yrs = sorted(d.keys())
+        if yr <= yrs[0]: return d[yrs[0]]
+        if yr >= yrs[-1]: return d[yrs[-1]]
+        for i in range(len(yrs) - 1):
+            if yrs[i] <= yr <= yrs[i+1]:
+                f = (yr - yrs[i]) / (yrs[i+1] - yrs[i])
+                return d[yrs[i]] + f * (d[yrs[i+1]] - d[yrs[i]])
+        return d[yrs[-1]]
 
-    new_assets = future_assets.loc[
-        (future_assets.Year > 2025) &
-        (future_assets.Year <= year) &
-        (future_assets.Department == 'Battery storage'),
-        'Capacity_MW'
-    ].sum() / 1000
+    # NOTE: uniform p_nom scaling of wind/solar fleets is disabled.
+    # Tried earlier: `n.generators.loc[gens_c, 'p_nom'] *= factor` to hit CP30 targets.
+    # Result: for solar especially (only 2 transmission BMUs ~18 MW) the scaling factor
+    # was ~590x, concentrating ~10 GW solar at 2 buses with marginal_cost ~ 0.
+    # That made the LP feasible but degenerate — all bus prices collapsed to 0.
+    # PyPSA's netcdf export then skipped marginal_price (it equals the schema default 0.0),
+    # silently breaking downstream postprocessing. Re-enable only with a careful spatial
+    # spread (e.g. distribute new capacity across many buses with non-zero marginal_cost).
+    # For now the AR4-7 + build-pipeline additions are the only source of new wind/solar.
+    for carrier in ('offwind', 'onwind', 'solar'):
+        gens_c = n.generators.index[n.generators.carrier == carrier]
+        current_T = n.generators.loc[gens_c, 'p_nom'].sum()
+        target_total = _interp(RENEWABLE_TARGETS_MW[carrier], year)
+        target_T = target_total * _interp(T_SHARE[carrier], year)
+        logger.info(f"{carrier} {year}: current {current_T:.0f} MW vs CP30-adjusted target {target_T:.0f} MW (gap {target_T - current_T:+.0f} MW, scaling disabled)")
 
-    print(f'Adjusting Battery Capacity from 2025 ({installed_capacity} GW) by adding {new_assets} GW')
+    # Batteries: same target-based approach (replaces the old build-pipeline plateau)
+    target_batt_total = _interp(RENEWABLE_TARGETS_MW['battery'], year)
+    target_batt_T = target_batt_total * _interp(T_SHARE['battery'], year)
+    batt_idx = n.storage_units.index[n.storage_units.carrier == 'battery']
+    current_batt_T = n.storage_units.loc[batt_idx, 'p_nom'].sum()
+    if current_batt_T > 0 and target_batt_T > current_batt_T:
+        factor = target_batt_T / current_batt_T
+        n.storage_units.loc[batt_idx, 'p_nom'] *= factor
+        # also scale energy capacity proportionally to keep duration unchanged
+        if 'max_hours' in n.storage_units.columns:
+            pass  # duration preserved automatically via p_nom × max_hours
+        logger.info(f"battery: scaled fleet {current_batt_T:.0f} → {target_batt_T:.0f} MW (factor {factor:.2f})")
 
-    factor = (new_assets + installed_capacity) / installed_capacity
-    n.storage_units.loc[n.storage_units.carrier == 'battery', 'p_nom'] *= factor
+    # Hinkley Point C: 2 EPR reactors, 1,630 MW each, commissioning 2030 + 2031 per EDF Feb 2026.
+    # Located at the existing Hinkley site (51.21°N, -3.13°W).
+    HPC_REACTORS = [
+        ('Hinkley Point C-1', 2030, 1630, 51.21, -3.13),
+        ('Hinkley Point C-2', 2031, 1630, 51.21, -3.13),
+    ]
+    for hpc_name, hpc_year, hpc_mw, hpc_lat, hpc_lon in HPC_REACTORS:
+        if year >= hpc_year and hpc_name not in n.generators.index:
+            distances = np.sqrt((buslocs['x'] - hpc_lon)**2 + (buslocs['y'] - hpc_lat)**2)
+            closest_bus = distances.idxmin()
+            n.add('Generator', hpc_name, bus=closest_bus, carrier='nuclear',
+                  p_nom=hpc_mw, p_max_pu=0.85, marginal_cost=10.0)
+            logger.info(f"Added {hpc_name}: {hpc_mw} MW at bus {closest_bus}")
+
 
     ##### Offshore transmission lines (all of which are HVDC)
 
@@ -527,6 +589,11 @@ if __name__ == '__main__':
     if False in list(countries_cost_slopes.keys()):
         countries_cost_slopes['NO'] = countries_cost_slopes[False]
         del countries_cost_slopes[False]
+
+    # Steepen the foreign supply curves; see add_electricity.py for rationale (concentrated
+    # IC injection has a larger local price impact than EuroMod's system-wide net-demand slope).
+    ic_slope_factor = snakemake.params['ic_slope_factor']
+    countries_cost_slopes = {k: v * ic_slope_factor for k, v in countries_cost_slopes.items()}
 
     with open(snakemake.input['interconnection_helpers'], 'r') as f:
         interconnection_helpers = yaml.safe_load(f)

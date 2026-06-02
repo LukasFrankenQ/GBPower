@@ -40,8 +40,8 @@ rule summarize_bmu_revenues:
 
 rule summarize_system_cost:
     input:
-        bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
-        offers=lambda wc: f"data/base/{fix_year(wc.day)}/offers.csv",
+        offer_curve=lambda wc: f"data/prerun/balancing_offer_curve_{fix_year(wc.day)[:4]}.csv",
+        bid_curve=lambda wc: f"data/prerun/balancing_bid_curve_{fix_year(wc.day)[:4]}.csv",
         cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
         roc_values="data/prerun/roc_values.csv",
         network_nodal="results/{day}/network_{ic}_s_nodal_solved.nc",

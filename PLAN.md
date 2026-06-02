@@ -36,12 +36,43 @@ Optionally also re-run `prepare_bmus` to fold the new Phase B additions into a c
 
 ### Phase F — extend future horizon to 2031–2035
 
-Currently the `future` wildcard is `off|202[6-9]|2030`. The plan calls for `2026..2035`. Blocked on data sourcing:
+**Status: partially unblocked.** `data/gb_electricity_loads.yaml` extended via linear extrapolation. AR7+AR7a registers wired in (`data/ar7_results.csv`, 185 projects). 2031-2035 days now run end-to-end with the AR-coverage that exists.
 
-- `data/UK_energy_build__2025_2030__with_coordinates.csv` → extend coverage to 2035 (NESO TEC register, ESO Future Energy Scenarios, NIC pipeline). Rename to `_2026_2035_` or keep filename and just append rows.
-- `data/GB_onshore_transmission_additions_2025_2030.csv` → extend to 2035 (Beyond 2030 ESO plans, ASTI, HND).
-- `data/prerun/europe_avg_day_ahead_prices_2030.csv` → either keep 2030 prices for 2031–2035 (document as a limitation) or source a TYNDP 2035 scenario.
-- `data/gb_electricity_loads.yaml` → extend `{year}_neso` series to 2031–2035 (NESO FES).
+Remaining work for credible 2031-2035 outputs:
+
+- **Capacity-expansion heuristic** (open issue — see new section "Renewable capacity expansion 2030+" below): AR registers exhaust at 2028-2030 delivery. Beyond that, the wind/solar/battery fleet plateaus at AR4-7 + 2025 PN baseline. To match the NESO CP30 trajectory and Beyond 2030 outlook, the model needs a scaling mechanism that grows the fleet to target capacities (e.g. 67 GW offwind, 30 GW onwind, 64 GW solar, 30 GW battery by 2035).
+- **`data/UK_energy_build__2025_2030__with_coordinates.csv`** — extend coverage to 2035 with NESO TEC register + Beyond 2030 ESO plans. (Filename suggests 2030 ceiling; rename or extend.)
+- **`data/GB_onshore_transmission_additions_2025_2030.csv`** — extend with Beyond 2030 ESO plans / ASTI / HND.
+- **`data/prerun/europe_avg_day_ahead_prices_2030.csv`** — currently a 7-row static average; consider TYNDP 2035 scenario for credible 2031-2035 EU price feedback.
+
+### Renewable capacity expansion 2030+
+
+The AR4-7 wind/solar additions in `prepare_future_network.py` only cover projects with delivery year ≤ 2029-2030. Beyond that there's no AR data, so the fleet plateaus. To track NESO Clean Power 2030 / Beyond 2030 targets, a CP30-anchored scaling step is needed.
+
+Sketch:
+
+```python
+RENEWABLE_TARGETS_MW = {
+    'offwind':  {2024: 14_800, 2030: 46_500, 2035: 67_000, 2040: 88_000},   # CP30 mid + CCC 7CB
+    'onwind':   {2024: 14_200, 2030: 28_000, 2035: 30_000, 2040: 32_000},   # CP30 + CCC
+    'solar':    {2024: 17_200, 2030: 46_000, 2035: 64_000, 2040: 82_000},   # CP30 + CCC
+    'battery':  {2024:  4_700, 2030: 25_000, 2035: 30_000, 2040: 35_000},   # CP30 + CCC
+}
+
+def scale_to_target(n, carrier, year):
+    target_mw = linear_interp(RENEWABLE_TARGETS_MW[carrier], year)
+    # multiply by transmission share if the target is total-system (CP30 numbers are total system)
+    target_T_mw = target_mw * t_share(carrier, year)
+    current_mw = n.generators.loc[n.generators.carrier==carrier, 'p_nom'].sum()
+    if current_mw > 0 and target_T_mw > current_mw:
+        factor = target_T_mw / current_mw
+        n.generators.loc[n.generators.carrier==carrier, 'p_nom'] *= factor
+```
+
+Issues to fix in the same pass:
+1. **AR solar p_nom collapse bug**: `prepare_future_network.py:228` does `new_capacity = network_capacity × (size / current_capacity)`. For solar this collapses because the model's existing solar fleet is only ~18 MW (BURWS, LARKS) vs the national 17.2 GW. Result: each AR7 solar project gets p_nom ≈ 0.03 MW instead of its actual size. Fix: for AR additions, use direct `p_nom = size_MW` and derive `p_max_pu` from a normalized profile.
+2. **Battery scaling beyond 2030**: the existing `factor = (sum_of_new_assets + installed) / installed` formula plateaus because `future_assets` has no rows beyond 2030. Replace with target-based scaling using `RENEWABLE_TARGETS_MW['battery']`.
+3. **Hinkley Point C**: add as explicit units (3.26 GW nuclear, two reactors, lat/lon = 51.21°N, -3.13°W, commissioning 2030 + 2031 per EDF Feb 2026 announcement). Currently nuclear capacity is fixed at the 2025 fleet.
 
 Once available, widen Snakefile regex to `off|202[6-9]|203[0-5]` and update relevant assertions.
 

@@ -32,6 +32,13 @@ nice_names:
   battery: "Battery"
   demand_flex: "Flexible Demand"
 
+# Multiplier on the EuroMod Fig-3 foreign supply-curve slopes (countries_cost_slopes).
+# EuroMod slopes are diffuse system-wide net-demand responses; a concentrated interconnector
+# injection has a larger local price impact, so the raw slopes let ICs saturate bang-bang and
+# the model spuriously over-exports. Calibrated against observed 2022-2025 IC flows (see
+# plotting/validation.py); 1.0 reproduces the raw EuroMod behaviour.
+ic_slope_factor: 12
+
 countries_cost_slopes: # data-driven values taken from Fig 3 in Mendes et al. (2024) 'EuroMod: Modelling European power markets...'
   Belgium: 7.75 # EUR/GW
   Denmark: 6.28 # EUR/GW

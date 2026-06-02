@@ -828,6 +828,13 @@ if __name__ == '__main__':
         europe_cost_slopes['NO'] = europe_cost_slopes[False]
         del europe_cost_slopes[False]
 
+    # Steepen the foreign supply curves relative to the EuroMod Fig-3 slopes. Those slopes
+    # describe a diffuse, system-wide net-demand response; a concentrated interconnector
+    # injection has a larger LOCAL price impact (internal congestion), so the raw EuroMod
+    # slope under-limits bang-bang IC saturation and the model spuriously over-exports.
+    ic_slope_factor = snakemake.params['ic_slope_factor']
+    europe_cost_slopes = {k: v * ic_slope_factor for k, v in europe_cost_slopes.items()}
+
     thermal_generation_costs = (
         pd.read_csv(
             snakemake.input['thermal_generation_costs'],

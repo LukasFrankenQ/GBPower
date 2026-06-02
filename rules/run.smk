@@ -5,6 +5,7 @@
 rule add_electricity:
     params:
         countries_cost_slopes=config['countries_cost_slopes'],
+        ic_slope_factor=config.get('ic_slope_factor', 1.0),
     input:
         network='data/raw/lmp_base.nc',
         roc_values='data/prerun/roc_values.csv',
@@ -112,6 +113,7 @@ def fix_year(day):
 rule prepare_future_network:
     params:
         countries_cost_slopes=config['countries_cost_slopes'],
+        ic_slope_factor=config.get('ic_slope_factor', 1.0),
     input:
         # if day wildcard is >=2026-01-01, 2025 data is used for the inputs
         # Use lambda function to check date and modify input day if needed
