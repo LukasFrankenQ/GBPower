@@ -91,6 +91,47 @@ def add_lat_lon(df):
     return df
 
 
+# GB nuclear forward fleet: net nameplate (MW), representative availability, true (lon, lat),
+# and EDF's published end-of-generation date (year, month). The 2025 base only carries whichever
+# units happened to run on the anchor day, at their (often derated / part-outage) declared level;
+# here we instead place each *surviving* station at nameplate x availability — so future output
+# reflects expected rather than anchor-specific performance — and retire the AGRs on schedule.
+# AGR availability 0.72 reflects recent end-of-life GB load factors; Sizewell B (PWR) 0.85.
+NUCLEAR_FLEET = {
+    'SIZB':  ('Sizewell B', 1198, 0.85,  1.620, 52.215, (2035, 4)),
+    'HEYM1': ('Heysham 1',  1150, 0.72, -2.916, 54.029, (2027, 4)),
+    'HRTL':  ('Hartlepool', 1190, 0.72, -1.181, 54.635, (2027, 4)),
+    'HEYM2': ('Heysham 2',  1230, 0.72, -2.916, 54.029, (2030, 4)),
+    'TORN':  ('Torness',    1185, 0.72, -2.408, 55.968, (2030, 4)),
+}
+
+
+def refit_nuclear_fleet(n, year, buslocs):
+    """Retire AGRs on EDF's schedule and reset surviving stations to nameplate x availability.
+
+    Future networks only (year >= 2026; historic days exit before adjust_to_future_year — see
+    __main__). Removes the 2025-anchored AGR/PWR units and re-adds each non-retired station as one
+    generator at the bus nearest its true coordinates. This decouples future nuclear from the 2025
+    anchor day's specific outages and removes AGRs once the modelled date passes their closure.
+    Retirement is day-level: e.g. a Jan-2027 day still has Heysham 1, a May-2027 day does not.
+    """
+    nuc = n.generators.index[n.generators.carrier == 'nuclear']
+    carried = [g for g in nuc if any(g.startswith(p) for p in NUCLEAR_FLEET)]
+    if not carried:
+        return
+    nuclear_mc = float(n.generators.loc[carried, 'marginal_cost'].median())
+    n.remove('Generator', carried)
+    ym = (year, n.snapshots[0].month)
+    for pref, (name, cap, cf, lon, lat, retire) in NUCLEAR_FLEET.items():
+        if ym >= retire:
+            logger.info(f"Nuclear: {name} retired by {year}-{ym[1]:02d}")
+            continue
+        bus = np.sqrt((buslocs['x'] - lon) ** 2 + (buslocs['y'] - lat) ** 2).idxmin()
+        n.add('Generator', f'{pref}_future', bus=bus, carrier='nuclear',
+              p_nom=cap, p_max_pu=cf, marginal_cost=nuclear_mc)
+        logger.info(f"Nuclear: {name} {cap} MW x {cf:.2f} avail on bus {bus}")
+
+
 def adjust_to_future_year(
     n,
     year,
@@ -349,6 +390,10 @@ def adjust_to_future_year(
         if 'max_hours' in n.storage_units.columns:
             pass  # duration preserved automatically via p_nom × max_hours
         logger.info(f"battery: scaled fleet {current_batt_T:.0f} → {target_batt_T:.0f} MW (factor {factor:.2f})")
+
+    # Retire AGRs on EDF's schedule and reset surviving stations to representative availability,
+    # decoupling future nuclear from the 2025 anchor day's specific outages.
+    refit_nuclear_fleet(n, year, buslocs)
 
     # Hinkley Point C: 2 EPR reactors, 1,630 MW each, commissioning 2030 + 2031 per EDF Feb 2026.
     # Located at the existing Hinkley site (51.21°N, -3.13°W).
