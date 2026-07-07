@@ -5,8 +5,8 @@
 
 rule build_base:
     input:
-        europe_day_ahead_prices="data/europe_day_ahead_prices_GBP.csv",
-        flow_constraints=lambda wildcards: "data/prerun/flow_constraints_{}.csv".format(wildcards.day[:4]),
+        europe_day_ahead_prices=ancient("data/europe_day_ahead_prices_GBP.csv"),
+        flow_constraints=lambda wildcards: ancient("data/prerun/flow_constraints_{}.csv".format(wildcards.day[:4])),
     output:
         date_register="data/base/{day}/settlement_period_register.csv",
         boundary_flow_constraints="data/base/{day}/boundary_flow_constraints.csv", 

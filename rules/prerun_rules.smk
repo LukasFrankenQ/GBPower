@@ -362,7 +362,7 @@ rule build_cfds:
         bmu_locations="data/raw/temp_located_bmus.csv",
         bmu_mappings="data/cfd_registers/cfd_to_bm_unit_mapping.csv",
     output:
-        cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
+        # cfd_strike_prices="data/prerun/cfd_strike_prices.csv",
     resources:
         mem_mb=4000,
     log:

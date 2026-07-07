@@ -4,6 +4,8 @@
 
 **GBPower** is a [PyPSA](https://github.com/pypsa/pypsa)-based, unit-level electricity market model of Great Britain. It was built to analyse what would have happened to wholesale and balancing markets in 2022–2024 if GB had implemented a zonal market design instead of the national one. The accompanying paper is *Risk and Reward of Transitioning from a National to a Zonal Electricity Market in Great Britain* (Franken, Lyden, Friedrich — arXiv:2506.04107).
 
+**Paper source location.** The LaTeX working copy of this paper lives *outside* the repo at `../lmp_paper/` (relative to the repo root): root `main.tex`, body sections in `sections/`, and all figure images in `imgs/`. Figures are numbered by order of appearance — Fig 3 `total_monthly_costs_w_comparison.pdf`, Fig 4 `wind_cases_*.pdf`, Fig 5 `annual_unit_revenues.pdf`, Fig 7 `surplus_changes_30_after_policy.pdf`, Fig 8 `waterfall_chart.pdf`, Fig 9 `socioeconomic_benefits.pdf`. Four-year (2022–2025) rebuilds of these six figures live in `new_plots/` (see that dir's scripts; original 3-year builders are in `notebooks/` and their auto-converted twins in `plotting/`).
+
 The model is **data-driven**: for each historical day it pulls physical notifications, MELs, day-ahead prices, balancing actions, interconnector data and constraint volumes from ELEXON, ENTSO-E and NESO APIs, calibrates the network, then solves wholesale and balancing markets under three layouts (national, zonal, nodal).
 
 Structurally inspired by **PyPSA-Eur**: a Snakemake workflow over a `rules/` + `scripts/` layout, NetCDF networks flowing between rules, post-processing into CSVs.

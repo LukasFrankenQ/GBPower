@@ -451,7 +451,10 @@ def _query_entsoe_prices(countries, start, end):
 
     data = []
     for cc in countries:
-        series = client.query_day_ahead_prices(cc, start=start, end=end).rename(cc)
+        series = robust_request(
+            client.query_day_ahead_prices, cc, start=start, end=end,
+            max_retries=30, wait_time=10,
+        ).rename(cc)
         data.append(series)
 
     return pd.concat(data, axis=1)
@@ -561,16 +564,18 @@ def build_nemo_powerflow(date_range):
 
     client = EntsoePandasClient(api_key=ENTSOE_API_KEY, retry_delay=60)
 
-    nemo_BEGB = client.query_crossborder_flows(
-        'BE', 'GB',
+    nemo_BEGB = robust_request(
+        client.query_crossborder_flows, 'BE', 'GB',
         start=date_range[0] - pd.Timedelta('60min'),
         end=date_range[-1] + pd.Timedelta('60min'),
+        max_retries=30, wait_time=10,
         )
 
-    nemo_GBBE = client.query_crossborder_flows(
-        'GB', 'BE',
+    nemo_GBBE = robust_request(
+        client.query_crossborder_flows, 'GB', 'BE',
         start=date_range[0] - pd.Timedelta('60min'),
         end=date_range[-1] + pd.Timedelta('60min'),
+        max_retries=30, wait_time=10,
         )
 
     nemo_flow = (nemo_BEGB - nemo_GBBE).resample('30min').mean()

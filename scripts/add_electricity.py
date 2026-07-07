@@ -91,7 +91,21 @@ def scale_merit_order(
         max_avail_gen['cum_p_nom'] = max_avail_gen['p_nom'].cumsum()
 
         load = n.loads_t.p_set[gb_buses].iloc[period].sum()
-        marginal_unit = max_avail_gen[max_avail_gen['cum_p_nom'] > load].iloc[0].name
+        above_load = max_avail_gen[max_avail_gen['cum_p_nom'] > load]
+        if above_load.empty:
+            # Modelled available capacity does not cover demand this period
+            # (degenerate adequacy edge case). Take the most expensive available
+            # unit as marginal; the real shortfall is covered by backup generators
+            # at solve time.
+            avail = max_avail_gen['cum_p_nom'].iloc[-1]
+            logger.warning(
+                f"scale_merit_order: available capacity {avail:.0f} MW below load "
+                f"{load:.0f} MW at {dt} (short {load - avail:.0f} MW); using most "
+                f"expensive available unit as marginal."
+            )
+            marginal_unit = max_avail_gen.iloc[-1].name
+        else:
+            marginal_unit = above_load.iloc[0].name
         mc = max_avail_gen.loc[marginal_unit, 'marginal_cost']
 
         if isinstance(mc, pd.Series): 

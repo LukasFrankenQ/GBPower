@@ -17,10 +17,7 @@ rule add_electricity:
         meritorder_slope_factors="data/prerun/meritorder_slope_factors.csv",
         interconnection_helpers='data/interconnection_helpers.yaml',
         # Future-year days (>= 2026) reuse the 2025-anchor base data via fix_year().
-        thermal_generation_costs=lambda wildcards: 'data/prerun/thermal_costs/{year}-week{week}.csv'.format(
-            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
-            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
-        ),
+        thermal_generation_costs=lambda wildcards: nearest_weekly("thermal_costs", wildcards.day),
         day_ahead_prices=lambda wc: f"data/base/{fix_year(wc.day)}/day_ahead_prices.csv",
         maximum_export_limits=lambda wc: f"data/base/{fix_year(wc.day)}/maximum_export_limits.csv",
         physical_notifications=lambda wc: f"data/base/{fix_year(wc.day)}/physical_notifications.csv",
@@ -108,6 +105,25 @@ def fix_year(day):
     if y >= 2026:
         y = 2025
     return f"{y:04d}-{m:02d}-{d:02d}"
+
+
+def nearest_weekly(subdir, day, ext="csv"):
+    """Resolve data/prerun/<subdir>/{year}-week{week}.<ext> for `day`, falling back
+    to the most recent earlier week that exists when the exact file is missing
+    (gaps in shipped weekly assets, e.g. 2025 weeks 47-50). Walks back up to ~10
+    weeks, crossing into the previous year if needed."""
+    import os
+    d = datetime.strptime(fix_year(day), "%Y-%m-%d")
+    y, w = d.year, d.isocalendar()[1]
+    for _ in range(11):
+        cand = f"data/prerun/{subdir}/{y}-week{str(w).zfill(2)}.{ext}"
+        if os.path.exists(cand):
+            return cand
+        w -= 1
+        if w < 1:
+            y -= 1
+            w = 52
+    return f"data/prerun/{subdir}/{d.year}-week{str(d.isocalendar()[1]).zfill(2)}.{ext}"
 
 
 rule prepare_future_network:

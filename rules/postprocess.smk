@@ -13,10 +13,7 @@ rule summarize_bmu_revenues:
         network_national_redispatch="results/{day}/network_{ic}_s_national_solved_redispatch.nc",
         network_zonal="results/{day}/network_{ic}_s_zonal_solved.nc",
         network_zonal_redispatch="results/{day}/network_{ic}_s_zonal_solved_redispatch.nc",
-        default_balancing_prices=lambda wildcards: 'data/prerun/balancing_prices/{year}-week{week}.csv'.format(
-            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
-            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
-        ),
+        default_balancing_prices=lambda wildcards: nearest_weekly("balancing_prices", wildcards.day),
     output:
         bmu_revenues_nodal="results/{day}/bmu_revenues_{ic}_nodal.csv",
         bmu_revenues_zonal="results/{day}/bmu_revenues_{ic}_zonal.csv",
@@ -79,10 +76,7 @@ rule summarize_frontend_data:
         gb_shape="data/gb_shape.geojson",
         bids=lambda wc: f"data/base/{fix_year(wc.day)}/bids.csv",
         offers=lambda wc: f"data/base/{fix_year(wc.day)}/offers.csv",
-        default_balancing_prices=lambda wildcards: 'data/prerun/balancing_prices/{year}-week{week}.csv'.format(
-            year=datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').year,
-            week=str(datetime.strptime(fix_year(wildcards.day), '%Y-%m-%d').isocalendar()[1]).zfill(2)
-        ),
+        default_balancing_prices=lambda wildcards: nearest_weekly("balancing_prices", wildcards.day),
     output:
         frontend_revenues="frontend/{day}/revenues_{ic}.csv",
         frontend_dispatch="frontend/{day}/dispatch_{ic}.csv",

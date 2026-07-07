@@ -34,8 +34,8 @@ def add_backup_generators(n):
         ac_buses.index + " backup",
         bus=ac_buses.index,
         carrier="backup",
-        capital_cost=10000,
-        marginal_cost=0,
+        capital_cost=0,
+        marginal_cost=10000,
         p_nom_extendable=True,
     )
 
