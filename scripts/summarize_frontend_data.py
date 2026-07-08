@@ -179,7 +179,12 @@ def get_unit_revenues(unit, who, bal):
             down_revenue = down_balancing.abs() * topup_rates * dt  # Negative * positive = negative
         
         else:
-            down_revenue = down_balancing.abs() * offer_price * dt
+            # Thermal (non-ROC/non-CfD) units are already made whole by keeping their
+            # full wholesale credit while saving fuel on the turned-down volume, so a
+            # consistent bid_cost is 0 -- booking +|down|*offer_price double-pays and
+            # leaks into Fig 8's producer surplus (the entire Fig 8<->Fig 9 welfare
+            # divergence traced to this term). See memory: fig5-thermal-surplus-bugs Bug B.
+            down_revenue = pd.Series(0.0, index=down_balancing.index)
 
         revenues['bid_cost'] = down_revenue
     
